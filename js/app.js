@@ -245,29 +245,41 @@
   });
 
   Net.on('GUESS_MATCHED', function (payload) {
-    if (!state.game) return;
+    if (!state.game || state.game.solved || state.game.isTransitioning) return;
     state.game.solved = true;
-    state.game.scores[payload.guesserIndex] += 25;
-    state.game.scores[1 - payload.guesserIndex] += 15;
+    if (payload.scores) {
+      state.game.scores = payload.scores;
+    } else {
+      state.game.scores[payload.guesserIndex] += 25;
+      state.game.scores[1 - payload.guesserIndex] += 15;
+    }
     state.game.chat.push({ by: payload.by, text: payload.word, correct: true });
     updateChatFeedDOM();
     Audio.playMatch();
     burstCenter(30);
     toast('🎉 ' + payload.by + ' ne sahi pehchana! +25 pts');
 
-    setTimeout(function () {
-      handleTurnTransition();
-    }, 2400);
+    if (Net.isHostUser()) {
+      scheduleNextTurn(2400);
+    }
   });
 
   Net.on('TIME_EXPIRED', function (payload) {
     if (!state.game) return;
     state.game.solved = false;
+    state.game.isTransitioning = true;
+    stopMatchTimer();
     Audio.playMiss();
     toast('⌛ Time Up! Sahi shabd tha: ' + payload.word);
-    setTimeout(function () {
-      handleTurnTransition();
-    }, 2800);
+    // Guest waits for ADVANCE_TURN or GAME_OVER from Host
+  });
+
+  Net.on('ADVANCE_TURN', function (payload) {
+    applyTurnTransition(payload);
+  });
+
+  Net.on('GAME_OVER', function (payload) {
+    applyGameOver(payload);
   });
 
   Net.on('RETURN_LOBBY', function () {
@@ -349,8 +361,9 @@
     window.addEventListener('resize', resizeCanvas);
 
     // Turn 0, 2, 4... = Host draws; Turn 1, 3, 5... = Guest draws
-    var turn = state.game.turnIndex % 2;
-    var isDrawer = state.game && ((turn === 0 && Net.isHostUser()) || (turn === 1 && !Net.isHostUser()));
+    var turn = state.game ? (state.game.turnIndex % 2) : 0;
+    var isDrawer = state.game && !state.game.isTransitioning && !state.game.solved &&
+      ((turn === 0 && Net.isHostUser()) || (turn === 1 && !Net.isHostUser()));
     if (!isDrawer) {
       canvas.style.cursor = 'default';
       return;
@@ -371,6 +384,7 @@
     }
 
     function onDown(e) {
+      if (!state.game || state.game.isTransitioning || state.game.solved) return;
       drawing = true;
       var pos = getCoords(e);
       lastX = pos.nx;
@@ -463,18 +477,17 @@
         hintEl.textContent = 'Hint: Pehla akshar "' + word.charAt(0) + '" hai!';
       }
 
-      // Time up
-      if (leftSec <= 0 && !state.game.solved) {
+      // Time up check (Only Host schedules authoritative turn advance)
+      if (leftSec <= 0 && !state.game.solved && !state.game.isTransitioning) {
         stopMatchTimer();
         var curWord = getCurrentWord().word;
         if (Net.isHostUser()) {
+          state.game.isTransitioning = true;
           Net.send('TIME_EXPIRED', { word: curWord });
+          Audio.playMiss();
+          toast('⌛ Time Up! Sahi shabd tha: ' + curWord);
+          scheduleNextTurn(2800);
         }
-        Audio.playMiss();
-        toast('⌛ Time Up! Sahi shabd tha: ' + curWord);
-        setTimeout(function () {
-          handleTurnTransition();
-        }, 2800);
       }
     }, 200);
   }
@@ -483,6 +496,10 @@
     if (state.timerInterval) {
       clearInterval(state.timerInterval);
       state.timerInterval = null;
+    }
+    if (state.game && state.game.transitionTimer) {
+      clearTimeout(state.game.transitionTimer);
+      state.game.transitionTimer = null;
     }
   }
 
@@ -493,32 +510,82 @@
     return state.game.deck[state.game.turnIndex % state.game.deck.length];
   }
 
-  function handleTurnTransition() {
+  function scheduleNextTurn(delayMs) {
+    if (!state.game) return;
+    state.game.isTransitioning = true;
+    if (state.game.transitionTimer) {
+      clearTimeout(state.game.transitionTimer);
+    }
+    state.game.transitionTimer = setTimeout(function () {
+      advanceTurnAuthoritative();
+    }, delayMs || 2200);
+  }
+
+  function advanceTurnAuthoritative() {
     stopMatchTimer();
     if (!state.game) return;
 
     var nextTurn = state.game.turnIndex + 1;
     if (nextTurn < state.game.totalTurns) {
-      // Advance to next word / turn
-      state.game.turnIndex = nextTurn;
-      state.game.endAt = Date.now() + 60000;
-      state.game.solved = false;
-      state.strokes = [];
+      var newEndAt = Date.now() + 60000;
+      var turnPayload = {
+        turnIndex: nextTurn,
+        endAt: newEndAt,
+        scores: state.game.scores
+      };
 
-      var nextDrawerIsHost = (nextTurn % 2) === 0;
-      var nextDrawerName = nextDrawerIsHost
-        ? (Net.isHostUser() ? profile.name : Net.getPartnerName())
-        : (Net.isHostUser() ? Net.getPartnerName() : profile.name);
+      // 1. Authoritative broadcast to partner
+      Net.send('ADVANCE_TURN', turnPayload);
 
-      toast('Turn ' + (nextTurn + 1) + '/' + state.game.totalTurns + '! Ab ' + nextDrawerName + ' draw karenge 🎨');
-      render();
+      // 2. Apply locally on Host
+      applyTurnTransition(turnPayload);
     } else {
-      // All rounds complete -> Scorecard
-      state.screen = 'results';
-      Audio.playUnlock();
-      burstCenter(35);
-      render();
+      var resultsPayload = {
+        scores: state.game.scores
+      };
+      Net.send('GAME_OVER', resultsPayload);
+      applyGameOver(resultsPayload);
     }
+  }
+
+  function applyTurnTransition(payload) {
+    if (!state.game) return;
+    stopMatchTimer();
+
+    state.game.turnIndex = payload.turnIndex;
+    state.game.endAt = payload.endAt;
+    state.game.scores = payload.scores;
+    state.game.solved = false;
+    state.game.isTransitioning = false;
+    state.game.transitionTimer = null;
+    state.strokes = [];
+
+    var canvas = $('#drawCanvas');
+    if (canvas) {
+      var ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    var nextDrawerIsHost = (payload.turnIndex % 2) === 0;
+    var nextDrawerName = nextDrawerIsHost
+      ? (Net.isHostUser() ? profile.name : Net.getPartnerName())
+      : (Net.isHostUser() ? Net.getPartnerName() : profile.name);
+
+    toast('Turn ' + (payload.turnIndex + 1) + '/' + state.game.totalTurns + '! Ab ' + nextDrawerName + ' draw karenge 🎨');
+    render();
+  }
+
+  function applyGameOver(payload) {
+    if (state.game) {
+      state.game.scores = payload.scores;
+      state.game.isTransitioning = false;
+      state.game.transitionTimer = null;
+    }
+    stopMatchTimer();
+    state.screen = 'results';
+    Audio.playUnlock();
+    burstCenter(35);
+    render();
   }
 
   function updateChatFeedDOM() {
@@ -1030,7 +1097,7 @@
       var input = $('#guessInput');
       if (!input) return;
       var val = input.value.trim();
-      if (!val || !state.game || state.game.solved) return;
+      if (!val || !state.game || state.game.solved || state.game.isTransitioning) return;
       input.value = '';
 
       var curWord = getCurrentWord().word;
@@ -1054,12 +1121,14 @@
         Net.send('GUESS_MATCHED', {
           word: curWord,
           by: profile.name,
-          guesserIndex: myIndex
+          guesserIndex: myIndex,
+          scores: state.game.scores
         });
 
-        setTimeout(function () {
-          handleTurnTransition();
-        }, 2400);
+        // Only Host schedules authoritative turn advancement! Guest waits for ADVANCE_TURN or GAME_OVER
+        if (isHost) {
+          scheduleNextTurn(2400);
+        }
       } else {
         var entry = { by: profile.name, text: val, correct: false };
         state.game.chat.push(entry);
