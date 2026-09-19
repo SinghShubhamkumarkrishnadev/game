@@ -36,7 +36,10 @@
   /* App State */
   var state = {
     screen: profile.name ? 'lobby' : 'welcome', // 'welcome' | 'lobby' | 'room_ready' | 'game' | 'results' | 'race'
-    modal: null, // null | 'join'
+    modal: (function () {
+      try { return localStorage.getItem('jodi_guide_seen') ? null : 'guide'; } catch (e) { return null; }
+    })(), // Show interactive user guide on first visit!
+    guideTab: 'scribble', // 'scribble' | 'race' | 'install'
     joinCodeInput: '',
     selectedGameMode: 'scribble', // 'scribble' | 'race'
     selectedBikeTheme: 'sport',   // 'sport' | 'bullet' | 'turbo' | 'cafe'
@@ -605,8 +608,9 @@
     var soundIcon = Audio.isMuted() ? '🔇' : '🔊';
     return '<div class="garland"></div>' +
       '<header class="app-header">' +
-      '<div class="brand-title">Jodi Scribble <span class="brand-tag">Online</span></div>' +
+      '<div class="brand-title">Jodi Games <span class="brand-tag">Online</span></div>' +
       '<div class="header-actions">' +
+      '<button class="icon-btn" data-action="openGuide" title="Khelne Ka Tareeka (User Guide)">📖</button>' +
       '<button class="icon-btn" data-action="toggleSound" title="Sound Toggle">' + soundIcon + '</button>' +
       '</div></header>';
   }
@@ -680,6 +684,7 @@
         : '') +
       '<div style="margin-top:auto;padding-top:16px;text-align:center;display:flex;flex-direction:column;gap:8px">' +
       '<button class="btn gold sm" data-action="soloPracticeRace">🏍️ 3D Bike Test Drive (Solo)</button>' +
+      '<button class="btn alt sm" data-action="openGuide">📖 Khelne Ka Tareeka (User Guide)</button>' +
       '<button class="btn ghost sm" data-action="editProfile">Naam Badlein</button>' +
       '</div></section>';
   }
@@ -1006,7 +1011,7 @@
       '</div></div></section>';
   }
 
-  // Bottom Sheet Modal for Join Code
+  // Bottom Sheet Modal for Join Code & User Manual Guide
   function renderModal() {
     var m = $('#modal');
     if (!m) return;
@@ -1019,6 +1024,86 @@
         '<button class="btn ghost" style="flex:1" data-action="closeModal">Cancel</button>' +
         '<button class="btn primary" style="flex:1" data-action="submitJoin">Connect 🚀</button>' +
         '</div></div>';
+      m.classList.add('on');
+    } else if (state.modal === 'guide') {
+      var tab = state.guideTab || 'scribble';
+      var contentHtml = '';
+      if (tab === 'scribble') {
+        contentHtml = '<div class="guide-step-card">' +
+          '<span class="guide-num">1</span>' +
+          '<div><div class="guide-step-title">Room Banao ya Join Karo</div>' +
+          '<div class="guide-step-desc">Ek partner <b>Room Banao</b> dabayega aur code share karega. Doosra <b>Room Join Karo</b> me code daal kar connect hoga.</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">2</span>' +
+          '<div><div class="guide-step-title">Bari-Bari Draw &amp; Guess</div>' +
+          '<div class="guide-step-desc">Turn 1 me pehla partner draw karega aur doosra guess karega. Agle turn me automatically roles swap ho jayengi!</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">3</span>' +
+          '<div><div class="guide-step-title">30s me Automatic Hint</div>' +
+          '<div class="guide-step-desc">Agar word pehchanne me mushkil ho, to aadha time beetne par pehla akshar <span class="guide-highlight">Hint</span> me dikh jata hai.</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">4</span>' +
+          '<div><div class="guide-step-title">Scoring System</div>' +
+          '<div class="guide-step-desc">Sahi guess karne par Guesser ko <b class="guide-highlight">+25 Points</b> aur Drawer ko <b style="color:var(--mor)">+15 Points</b> milte hain!</div></div>' +
+          '</div>';
+      } else if (tab === 'race') {
+        contentHtml = '<div class="guide-step-card">' +
+          '<span class="guide-num">1</span>' +
+          '<div><div class="guide-step-title">Apni 3D Superbike Chuno</div>' +
+          '<div class="guide-step-desc">Royal Bullet, Neon Sport, Teal Turbo, ya Cafe Racer — dono partner apni-apni manpasand 3D bike select karein.</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">2</span>' +
+          '<div><div class="guide-step-title">Steering, Gas &amp; Nitro Boost</div>' +
+          '<div class="guide-step-desc">Left/Right steer buttons, Gas dabakar speed pakdein aur <b>⚡ Nitro</b> se super thrust lein!</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card" style="border-color:var(--genda);background:#FFF9EB">' +
+          '<span class="guide-num" style="background:var(--genda);color:#000">💥</span>' +
+          '<div><div class="guide-step-title" style="color:#000">Thokne Ka Feature (Takedown +50 PTS)</div>' +
+          '<div class="guide-step-desc" style="color:#2A1240">Agar aap speed me partner ki bike ko thokte hain, to aapko <b class="guide-highlight">+50 PTS</b> aur instant Nitro fuel milta hai! Partner crash ho jayega aur 1.8s me auto-respawn hoga.</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">3</span>' +
+          '<div><div class="guide-step-title">3 Laps &amp; Podium Finish</div>' +
+          '<div class="guide-step-desc">3 Laps complete karke sabse pehle finish arch cross karne wale ko <b class="guide-highlight">+100 PTS Finish Bonus</b> aur 🥇 Trophy milti hai!</div></div>' +
+          '</div>';
+      } else if (tab === 'install') {
+        contentHtml = '<div class="guide-badge-box">📲 <span>Ye game ek <b>Progressive Web App (PWA)</b> hai — bina App Store ke direct install hota hai!</span></div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">1</span>' +
+          '<div><div class="guide-step-title">Android / Chrome Me Install</div>' +
+          '<div class="guide-step-desc">Screen ke upar <b>"Install 🚀"</b> banner par click karein. Direct phone ki home screen par app icon ban jayega.</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">2</span>' +
+          '<div><div class="guide-step-title">iPhone / Safari Me Install</div>' +
+          '<div class="guide-step-desc">Safari ke bottom bar par <b>Share button (⎋)</b> dabayein, scroll karke <b>"Add to Home Screen (➕)"</b> par click karein.</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">3</span>' +
+          '<div><div class="guide-step-title">Automatic Updates</div>' +
+          '<div class="guide-step-desc">Jab bhi game update hota hai, app background me automatically update ho jati hai aur refresh ho jati hai.</div></div>' +
+          '</div>';
+      }
+
+      m.innerHTML = '<div class="modal-sheet guide-sheet">' +
+        '<div class="guide-header">' +
+        '<div class="guide-title"><span>📖</span> Khelne Ka Tareeka</div>' +
+        '<button class="pwa-dismiss-btn" data-action="closeGuide" style="color:var(--plum);font-size:20px">✕</button>' +
+        '</div>' +
+        '<div class="guide-tabs">' +
+        '<button class="guide-tab-btn ' + (tab === 'scribble' ? 'active' : '') + '" data-action="setGuideTab" data-tab="scribble">🎨 Scribble</button>' +
+        '<button class="guide-tab-btn ' + (tab === 'race' ? 'active' : '') + '" data-action="setGuideTab" data-tab="race">🏍️ 3D Race</button>' +
+        '<button class="guide-tab-btn ' + (tab === 'install' ? 'active' : '') + '" data-action="setGuideTab" data-tab="install">📲 Install Info</button>' +
+        '</div>' +
+        '<div class="guide-content-scroll">' + contentHtml + '</div>' +
+        '<div style="margin-top:14px">' +
+        '<button class="btn primary" data-action="closeGuide">Samajh Gaya, Chalo Khele! 🚀</button>' +
+        '</div>' +
+        '</div>';
       m.classList.add('on');
     } else {
       m.classList.remove('on');
@@ -1373,11 +1458,108 @@
         });
       }
       render();
+    } else if (action === 'openGuide') {
+      Audio.playTap();
+      state.modal = 'guide';
+      state.guideTab = 'scribble';
+      renderModal();
+    } else if (action === 'setGuideTab') {
+      Audio.playTap();
+      state.guideTab = target.dataset.tab;
+      renderModal();
+    } else if (action === 'closeGuide') {
+      Audio.playTap();
+      state.modal = null;
+      try { localStorage.setItem('jodi_guide_seen', 'true'); } catch (e) {}
+      renderModal();
+    } else if (action === 'installPwa') {
+      Audio.playTap();
+      handlePwaInstallClick();
+    } else if (action === 'dismissPwaBanner') {
+      isPwaDismissed = true;
+      updatePwaBannerVisibility();
     }
   });
+
+  /* ================= PWA INSTALLATION & AUTO-UPDATE ENGINE ================= */
+  var deferredInstallPrompt = null;
+  var isPwaDismissed = false;
+
+  function isRunningStandalone() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      window.navigator.standalone === true;
+  }
+
+  function updatePwaBannerVisibility() {
+    var banner = document.getElementById('pwaInstallBanner');
+    if (!banner) return;
+    if (isRunningStandalone() || isPwaDismissed) {
+      banner.style.display = 'none';
+    } else {
+      banner.style.display = 'flex';
+    }
+  }
+
+  function handlePwaInstallClick() {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      deferredInstallPrompt.userChoice.then(function (choice) {
+        if (choice.outcome === 'accepted') {
+          toast('Shukriya! Jodi App install ho raha hai... 📲');
+          isPwaDismissed = true;
+          updatePwaBannerVisibility();
+        }
+        deferredInstallPrompt = null;
+      });
+    } else {
+      // Guide fallback for iOS or non-prompting browsers
+      state.modal = 'guide';
+      state.guideTab = 'install';
+      renderModal();
+    }
+  }
+
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    updatePwaBannerVisibility();
+  });
+
+  window.addEventListener('appinstalled', function () {
+    deferredInstallPrompt = null;
+    isPwaDismissed = true;
+    updatePwaBannerVisibility();
+    toast('🎉 Jodi App successfully install ho gaya!');
+  });
+
+  // Service Worker Registration with Instant Auto-Update Check
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').then(function (reg) {
+        // Query for SW updates every time site opens
+        reg.update();
+
+        reg.addEventListener('updatefound', function () {
+          var newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', function () {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              toast('🚀 Naya version update ho gaya! Refresh ho raha hai...');
+              setTimeout(function () {
+                window.location.reload();
+              }, 1200);
+            }
+          });
+        });
+      }).catch(function (err) {
+        console.warn('[PWA] Service Worker registration:', err);
+      });
+    });
+  }
 
   // Initial Boot
   window.addEventListener('DOMContentLoaded', function () {
     render();
+    setTimeout(updatePwaBannerVisibility, 400);
   });
 })();

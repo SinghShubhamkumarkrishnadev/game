@@ -24,6 +24,19 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <!-- PWA App Install Notification Banner -->
+  <aside id="pwaInstallBanner" class="pwa-install-banner" style="display:none" aria-label="Install App">
+    <div class="pwa-icon-box">📲</div>
+    <div class="pwa-text">
+      <div class="pwa-title">Jodi App Install Karein</div>
+      <div class="pwa-desc">Full screen &amp; faster experience ke liye</div>
+    </div>
+    <div class="pwa-actions">
+      <button class="pwa-install-btn" id="btnPwaInstall" data-action="installPwa">Install 🚀</button>
+      <button class="pwa-dismiss-btn" data-action="dismissPwaBanner" aria-label="Close">✕</button>
+    </div>
+  </aside>
+
   <!-- Mobile App Frame Shell -->
   <main class="shell" id="shell">
     <div id="view" role="region" aria-live="polite"></div>
