@@ -35,9 +35,13 @@
 
   /* App State */
   var state = {
-    screen: profile.name ? 'lobby' : 'welcome', // 'welcome' | 'lobby' | 'room_ready' | 'game' | 'results'
+    screen: profile.name ? 'lobby' : 'welcome', // 'welcome' | 'lobby' | 'room_ready' | 'game' | 'results' | 'race'
     modal: null, // null | 'join'
     joinCodeInput: '',
+    selectedGameMode: 'scribble', // 'scribble' | 'race'
+    selectedBikeTheme: 'sport',   // 'sport' | 'bullet' | 'turbo' | 'cafe'
+    partnerBikeTheme: 'bullet',
+    raceTrackSeed: null,
     strokes: [],
     currentColor: '#2A1240',
     currentSize: 4,
@@ -125,6 +129,7 @@
   Net.on('partnerDisconnected', function () {
     toast('Partner disconnect ho gaye 🔴');
     Audio.playMiss();
+    if (window.JodiRace) window.JodiRace.cleanup();
     state.game = null;
     state.screen = 'lobby';
     render();
@@ -135,6 +140,61 @@
     if (el) {
       el.textContent = info.ms + 'ms';
     }
+  });
+
+  Net.on('SET_GAME_MODE', function (payload) {
+    state.selectedGameMode = payload.mode;
+    toast('Game Mode: ' + (payload.mode === 'race' ? '🏍️ Jodi Race (3D)' : '🎨 Jodi Scribble'));
+    render();
+  });
+
+  Net.on('PARTNER_BIKE_CHOICE', function (payload) {
+    state.partnerBikeTheme = payload.bike;
+    render();
+  });
+
+  Net.on('START_RACE', function (payload) {
+    state.raceTrackSeed = payload.seed;
+    if (payload.bike && !Net.isHostUser()) {
+      state.partnerBikeTheme = payload.bike;
+    }
+    state.screen = 'race';
+    Audio.playTap();
+    toast('🏁 3, 2, 1... GO! Race Shuru!');
+    render();
+  });
+
+  Net.on('EXIT_RACE', function () {
+    if (window.JodiRace) window.JodiRace.cleanup();
+    state.screen = 'room_ready';
+    toast('Partner ne race exit ki 🏠');
+    render();
+  });
+
+  Net.on('RACE_SYNC', function (payload) {
+    if (window.JodiRace) {
+      window.JodiRace.onPartnerSync(payload);
+    }
+  });
+
+  Net.on('TAKEDOWN_EVENT', function (payload) {
+    if (window.JodiRace) {
+      window.JodiRace.onExternalTakedown(payload);
+    }
+  });
+
+  Net.on('RACE_FINISH', function (payload) {
+    if (window.JodiRace) window.JodiRace.cleanup();
+    state.raceResults = {
+      winner: payload.winner,
+      isMeWinner: payload.winner === profile.name,
+      myScore: payload.partnerScore, // from partner's perspective, my score was their partnerScore
+      partnerScore: payload.myScore
+    };
+    state.screen = 'race_results';
+    Audio.playUnlock();
+    burstCenter(40);
+    render();
   });
 
   Net.on('UPDATE_SETTINGS', function (settings) {
@@ -551,12 +611,13 @@
           '<button class="btn alt" data-action="openJoinModal">Code Daalo 📲</button>' +
           '</div></div>'
         : '') +
-      '<div style="margin-top:auto;padding-top:16px;text-align:center">' +
+      '<div style="margin-top:auto;padding-top:16px;text-align:center;display:flex;flex-direction:column;gap:8px">' +
+      '<button class="btn gold sm" data-action="soloPracticeRace">🏍️ 3D Bike Test Drive (Solo)</button>' +
       '<button class="btn ghost sm" data-action="editProfile">Naam Badlein</button>' +
       '</div></section>';
   }
 
-  // 3. Connected Room Lobby (With Word Count & Language Selectors)
+  // 3. Connected Room Lobby (With Game Mode & Bike Selector)
   function vRoomReady() {
     var myName = profile.name;
     var partnerName = Net.getPartnerName() || 'Partner';
@@ -566,6 +627,7 @@
     var code = Net.getRoomCode();
     var latency = Net.getLatency();
     var ms = state.matchSettings;
+    var mode = state.selectedGameMode;
 
     return '<section class="screen">' +
       renderHeader() +
@@ -587,22 +649,68 @@
       '<div class="p-role">Partner 🟢</div>' +
       '</div></div>' +
 
-      // Match Settings Controls
-      '<div class="settings-section">' +
-      '<div class="settings-label"><span>🎯 Kitne Words Chahiye?</span><small>' + ms.wordCount + ' Words</small></div>' +
-      '<div class="segment-group">' +
-      '<button class="segment-btn ' + (ms.wordCount === 5 ? 'active' : '') + '" data-action="setCount" data-val="5">5 Words</button>' +
-      '<button class="segment-btn ' + (ms.wordCount === 10 ? 'active' : '') + '" data-action="setCount" data-val="10">10 Words</button>' +
-      '<button class="segment-btn ' + (ms.wordCount === 15 ? 'active' : '') + '" data-action="setCount" data-val="15">15 Words</button>' +
+      // Game Mode Selection
+      '<div class="settings-label" style="margin-top:10px"><span>🎮 Game Mode Chuno</span></div>' +
+      '<div class="game-mode-grid">' +
+      '<div class="game-mode-tile ' + (mode === 'scribble' ? 'active' : '') + '" data-action="setMode" data-mode="scribble">' +
+      '<span class="gm-icon">🎨</span>' +
+      '<div class="gm-title">Jodi Scribble</div>' +
+      '<div class="gm-desc">Draw &amp; Guess Words</div>' +
       '</div>' +
-      '<div class="settings-label"><span>🌐 Bhasha (Language)</span><small>' + (ms.language === 'hi' ? 'Hindi' : ms.language === 'en' ? 'English' : 'Mix') + '</small></div>' +
-      '<div class="segment-group">' +
-      '<button class="segment-btn teal ' + (ms.language === 'hi' ? 'active' : '') + '" data-action="setLang" data-val="hi">🇮🇳 Desi Hindi</button>' +
-      '<button class="segment-btn teal ' + (ms.language === 'en' ? 'active' : '') + '" data-action="setLang" data-val="en">🇬🇧 English</button>' +
-      '<button class="segment-btn teal ' + (ms.language === 'mix' ? 'active' : '') + '" data-action="setLang" data-val="mix">✨ Mix Dono</button>' +
-      '</div></div>' +
+      '<div class="game-mode-tile ' + (mode === 'race' ? 'active' : '') + '" data-action="setMode" data-mode="race">' +
+      '<span class="gm-icon">🏍️</span>' +
+      '<div class="gm-title">Jodi Race (3D)</div>' +
+      '<div class="gm-desc">Curvy Track &amp; Nitro</div>' +
+      '</div>' +
+      '</div>' +
 
-      '<button class="btn primary" data-action="startMatch">Khelna Shuru Karein 🎨</button>' +
+      // Mode-specific configuration
+      (mode === 'scribble'
+        ? '<div class="settings-section">' +
+          '<div class="settings-label"><span>🎯 Kitne Words Chahiye?</span><small>' + ms.wordCount + ' Words</small></div>' +
+          '<div class="segment-group">' +
+          '<button class="segment-btn ' + (ms.wordCount === 5 ? 'active' : '') + '" data-action="setCount" data-val="5">5 Words</button>' +
+          '<button class="segment-btn ' + (ms.wordCount === 10 ? 'active' : '') + '" data-action="setCount" data-val="10">10 Words</button>' +
+          '<button class="segment-btn ' + (ms.wordCount === 15 ? 'active' : '') + '" data-action="setCount" data-val="15">15 Words</button>' +
+          '</div>' +
+          '<div class="settings-label"><span>🌐 Bhasha (Language)</span><small>' + (ms.language === 'hi' ? 'Hindi' : ms.language === 'en' ? 'English' : 'Mix') + '</small></div>' +
+          '<div class="segment-group">' +
+          '<button class="segment-btn teal ' + (ms.language === 'hi' ? 'active' : '') + '" data-action="setLang" data-val="hi">🇮🇳 Desi Hindi</button>' +
+          '<button class="segment-btn teal ' + (ms.language === 'en' ? 'active' : '') + '" data-action="setLang" data-val="en">🇬🇧 English</button>' +
+          '<button class="segment-btn teal ' + (ms.language === 'mix' ? 'active' : '') + '" data-action="setLang" data-val="mix">✨ Mix Dono</button>' +
+          '</div></div>' +
+          '<button class="btn primary" data-action="startMatch">Khelna Shuru Karein 🎨</button>'
+        : '<div class="settings-section">' +
+          '<div class="settings-label"><span>🏍️ Apni Superbike Chuno</span><small>' + state.selectedBikeTheme.toUpperCase() + '</small></div>' +
+          '<div class="bike-select-grid">' +
+          '<div class="bike-card ' + (state.selectedBikeTheme === 'sport' ? 'active' : '') + '" data-action="pickBike" data-bike="sport">' +
+          '<span class="bike-icon">🏍️</span>' +
+          '<div class="bike-name">Rani Neon Sport</div>' +
+          '<div class="bike-tag">Speed &amp; Agility</div>' +
+          '<div class="bike-color-bar" style="background:linear-gradient(90deg, #D6246E, #FFB000)"></div>' +
+          '</div>' +
+          '<div class="bike-card ' + (state.selectedBikeTheme === 'bullet' ? 'active' : '') + '" data-action="pickBike" data-bike="bullet">' +
+          '<span class="bike-icon">🏍️</span>' +
+          '<div class="bike-name">Royal Bullet 350</div>' +
+          '<div class="bike-tag">Heavy Metal Cruiser</div>' +
+          '<div class="bike-color-bar" style="background:linear-gradient(90deg, #1A1A1A, #E6C280)"></div>' +
+          '</div>' +
+          '<div class="bike-card ' + (state.selectedBikeTheme === 'turbo' ? 'active' : '') + '" data-action="pickBike" data-bike="turbo">' +
+          '<span class="bike-icon">🏍️</span>' +
+          '<div class="bike-name">Mor Teal Turbo</div>' +
+          '<div class="bike-tag">Nitrous Speed Monster</div>' +
+          '<div class="bike-color-bar" style="background:linear-gradient(90deg, #0B7A7C, #38E1E4)"></div>' +
+          '</div>' +
+          '<div class="bike-card ' + (state.selectedBikeTheme === 'cafe' ? 'active' : '') + '" data-action="pickBike" data-bike="cafe">' +
+          '<span class="bike-icon">🏍️</span>' +
+          '<div class="bike-name">Kesar Cafe Racer</div>' +
+          '<div class="bike-tag">Desi Retro Beast</div>' +
+          '<div class="bike-color-bar" style="background:linear-gradient(90deg, #E65100, #FFD54F)"></div>' +
+          '</div></div>' +
+          '<p style="font-size:12px;color:var(--soft);margin-bottom:8px;font-weight:700">3D Real Physics • Procedural Curvy Track • Nitro Booster</p>' +
+          '</div>' +
+          '<button class="btn gold" data-action="startRace">Race Shuru Karein 🏍️💨</button>'
+      ) +
       '<div style="margin-top:8px">' +
       '<button class="btn ghost sm" data-action="leaveRoom">Room Se Niklo</button>' +
       '</div></div></section>';
@@ -738,6 +846,99 @@
       '</div></div></section>';
   }
 
+  // 6. 3D Bike Racing Arena
+  function vRace() {
+    return '<div class="race-container">' +
+      '<div id="raceCanvasMount"></div>' +
+      '<div class="race-hud-top">' +
+      '<div class="speedo-card">' +
+      '<span class="speedo-num" id="raceSpeedNum">0</span>' +
+      '<span class="speedo-unit">km/h</span>' +
+      '</div>' +
+      '<div class="speedo-card" style="border-color:#38E1E4">' +
+      '<span class="speedo-num" id="raceScoreBadge" style="color:#38E1E4;font-size:22px">0</span>' +
+      '<span class="speedo-unit">pts</span>' +
+      '</div>' +
+      '<div class="nitro-card">' +
+      '<div class="nitro-header">' +
+      '<span>⚡ Nitro</span>' +
+      '</div>' +
+      '<div class="nitro-track">' +
+      '<div class="nitro-fill" id="raceNitroBar"></div>' +
+      '</div>' +
+      '</div>' +
+      '<button class="race-hud-exit" data-action="exitRace">✕ Exit</button>' +
+      '</div>' +
+      // Minimap Overlay (Phase 2)
+      '<div class="race-minimap-card">' +
+      '<canvas id="raceMinimap" width="80" height="80"></canvas>' +
+      '<div class="race-lap-badge" id="raceLapBadge">Lap 1/3</div>' +
+      '</div>' +
+      // Distance Lead Indicator Pill
+      '<div class="race-lead-pill" id="raceLeadPill">🔥 Barabar</div>' +
+      // Takedown & Wipeout Notification Banner (Phase 3)
+      '<div class="race-takedown-banner" id="raceTakedownBanner"></div>' +
+      // Touch Driving Controls
+      '<div class="race-controls-bottom">' +
+      '<div class="steer-group">' +
+      '<button class="touch-btn steer" id="btnSteerL" aria-label="Steer Left">◀</button>' +
+      '<button class="touch-btn steer" id="btnSteerR" aria-label="Steer Right">▶</button>' +
+      '</div>' +
+      '<div class="pedal-group">' +
+      '<button class="touch-btn brake" id="btnBrake">Break</button>' +
+      '<button class="touch-btn nitro" id="btnNitro">⚡</button>' +
+      '<button class="touch-btn gas" id="btnGas">Gas</button>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
+  }
+
+  // 7. Race Results / Podium Screen (Phase 3)
+  function vRaceResults() {
+    var res = state.raceResults || {
+      winner: profile.name,
+      isMeWinner: true,
+      myScore: 100,
+      partnerScore: 50
+    };
+    var isMe = res.isMeWinner;
+    var partnerName = Net.getPartnerName() || 'Partner';
+    var myName = profile.name;
+
+    return '<section class="screen">' +
+      renderHeader() +
+      '<div style="text-align:center;padding:12px 0">' +
+      '<div style="font-size:52px;margin-bottom:4px">' + (isMe ? '🏆' : '🥈') + '</div>' +
+      '<h1 style="font-family:var(--font-display);font-size:clamp(26px, 7vw, 34px);color:var(--plum)">' +
+      (isMe ? 'Aap Jeet Gaye! 🏁' : esc(partnerName) + ' Jeet Gaye! 🏁') +
+      '</h1>' +
+      '<p style="color:var(--soft);font-size:14px;max-width:320px;margin:0 auto 12px">' +
+      (isMe ? 'Kamaal ki driving aur takedowns! 1st Place Podium Finish! 🚀' : 'Bohot tight race thi! Dobara race karke badla lo! 💨') +
+      '</p>' +
+      '<div class="card elevated" style="margin-bottom:14px">' +
+      '<div style="font-size:12.5px;font-weight:800;color:var(--soft);text-transform:uppercase">Final Race Score</div>' +
+      '<div class="duo-row" style="margin-top:10px">' +
+      '<div class="player-card ' + (isMe ? 'is-me' : '') + '">' +
+      '<span class="p-avatar">' + profile.avatar + '</span>' +
+      '<b>' + esc(myName) + '</b>' +
+      '<div style="font-size:22px;font-weight:900;color:var(--rani);margin-top:2px">' + res.myScore + ' pts</div>' +
+      '<div style="font-size:11px;color:var(--soft)">' + (isMe ? '🥇 1st Place (+100)' : 'Racer') + '</div>' +
+      '</div>' +
+      '<div class="player-card ' + (!isMe ? 'is-me' : '') + '">' +
+      '<span class="p-avatar">' + (Net.getPartnerAvatar() || '✨') + '</span>' +
+      '<b>' + esc(partnerName) + '</b>' +
+      '<div style="font-size:22px;font-weight:900;color:var(--mor);margin-top:2px">' + res.partnerScore + ' pts</div>' +
+      '<div style="font-size:11px;color:var(--soft)">' + (!isMe ? '🥇 1st Place (+100)' : 'Racer') + '</div>' +
+      '</div></div>' +
+      '<p style="font-size:12px;color:var(--soft);margin-top:8px">Finish Line Bonus: +100 pts • Har Takedown: +50 pts</p>' +
+      '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
+      '<button class="btn gold" data-action="raceAgain">Dobara Race Khelo 🏍️💨</button>' +
+      '<button class="btn alt" data-action="backToLobby">Room Lobby Mein Jao 🏠</button>' +
+      '<button class="btn ghost sm" data-action="leaveRoom">Room Se Niklo</button>' +
+      '</div></div></section>';
+  }
+
   // Bottom Sheet Modal for Join Code
   function renderModal() {
     var m = $('#modal');
@@ -769,6 +970,8 @@
     else if (state.screen === 'room_ready') html = vRoomReady();
     else if (state.screen === 'game') html = vGame();
     else if (state.screen === 'results') html = vResults();
+    else if (state.screen === 'race') html = vRace();
+    else if (state.screen === 'race_results') html = vRaceResults();
 
     view.innerHTML = html;
     renderModal();
@@ -777,6 +980,45 @@
       bindCanvasEvents();
       startMatchTimer();
       bindGuessForm();
+    } else if (state.screen === 'race') {
+      var mount = $('#raceCanvasMount');
+      if (mount && window.JodiRace) {
+        var isConnected = Net.getStatus() === 'connected';
+        var partnerOpts = {
+          name: isConnected ? (Net.getPartnerName() || 'Partner') : 'AI Racer (Solo)',
+          avatar: isConnected ? (Net.getPartnerAvatar() || '✨') : '🤖',
+          theme: state.partnerBikeTheme || 'bullet',
+          isSoloAI: !isConnected
+        };
+        window.JodiRace.init(mount, state.selectedBikeTheme, state.raceTrackSeed, partnerOpts);
+
+        if (isConnected) {
+          window.JodiRace.setOnLocalSync(function (data) {
+            Net.send('RACE_SYNC', data);
+          });
+          window.JodiRace.setOnTakedown(function (data) {
+            Net.send('TAKEDOWN_EVENT', data);
+          });
+        }
+
+        window.JodiRace.setOnFinish(function (finishData) {
+          if (window.JodiRace) window.JodiRace.cleanup();
+          var results = {
+            winner: finishData.winner === 'player' ? profile.name : (isConnected ? Net.getPartnerName() : 'AI Racer'),
+            isMeWinner: finishData.winner === 'player',
+            myScore: finishData.playerScore,
+            partnerScore: finishData.partnerScore
+          };
+          state.raceResults = results;
+          state.screen = 'race_results';
+          if (isConnected) {
+            Net.send('RACE_FINISH', results);
+          }
+          Audio.playUnlock();
+          burstCenter(40);
+          render();
+        });
+      }
     }
   }
 
@@ -1012,6 +1254,55 @@
       state.game = null;
       state.screen = 'lobby';
       toast('Room se nikal gaye 👋');
+      render();
+    } else if (action === 'setMode') {
+      Audio.playTap();
+      var modeVal = target.dataset.mode;
+      state.selectedGameMode = modeVal;
+      Net.send('SET_GAME_MODE', { mode: modeVal });
+      render();
+    } else if (action === 'pickBike') {
+      Audio.playTap();
+      var bikeVal = target.dataset.bike;
+      state.selectedBikeTheme = bikeVal;
+      Net.send('PARTNER_BIKE_CHOICE', { bike: bikeVal });
+      render();
+    } else if (action === 'startRace') {
+      Audio.playTap();
+      var seed = Math.floor(Math.random() * 9000) + 1000;
+      state.raceTrackSeed = seed;
+      state.screen = 'race';
+      Net.send('START_RACE', {
+        seed: seed,
+        bike: state.selectedBikeTheme
+      });
+      render();
+    } else if (action === 'soloPracticeRace') {
+      Audio.playTap();
+      state.raceTrackSeed = Math.floor(Math.random() * 9000) + 1000;
+      state.screen = 'race';
+      render();
+    } else if (action === 'exitRace') {
+      Audio.playTap();
+      if (window.JodiRace) window.JodiRace.cleanup();
+      if (Net.getStatus() === 'connected') {
+        state.screen = 'room_ready';
+        Net.send('EXIT_RACE', {});
+      } else {
+        state.screen = 'lobby';
+      }
+      render();
+    } else if (action === 'raceAgain') {
+      Audio.playTap();
+      var seed2 = Math.floor(Math.random() * 9000) + 1000;
+      state.raceTrackSeed = seed2;
+      state.screen = 'race';
+      if (Net.getStatus() === 'connected') {
+        Net.send('START_RACE', {
+          seed: seed2,
+          bike: state.selectedBikeTheme
+        });
+      }
       render();
     }
   });

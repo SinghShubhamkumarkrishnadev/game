@@ -1,5 +1,5 @@
 /* Jodi Scribble Service Worker - Offline & PWA Caching */
-const CACHE_NAME = 'jodiscribble-v1.0';
+const CACHE_NAME = 'jodiscribble-v1.1';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const ASSETS_TO_CACHE = [
   './js/words.js',
   './js/audio.js',
   './js/network.js',
+  './js/race.js',
   './js/app.js'
 ];
 

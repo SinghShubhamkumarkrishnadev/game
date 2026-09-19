@@ -200,6 +200,41 @@
         osc.start(t);
         osc.stop(t + 0.3);
       });
+    },
+
+    // Heavy metallic crash & impact for bike takedown
+    playCrash: function () {
+      buzz([100, 50, 150]);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var now = ac.currentTime;
+      var bufSize = Math.floor(ac.sampleRate * 0.35);
+      var buffer = ac.createBuffer(1, bufSize, ac.sampleRate);
+      var data = buffer.getChannelData(0);
+      for (var i = 0; i < bufSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+
+      var noise = ac.createBufferSource();
+      noise.buffer = buffer;
+
+      var filter = ac.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(900, now);
+      filter.frequency.exponentialRampToValueAtTime(100, now + 0.3);
+
+      var gain = ac.createGain();
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ac.destination);
+
+      noise.start(now);
+      noise.stop(now + 0.35);
     }
   };
 

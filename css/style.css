@@ -750,3 +750,416 @@ html, body {
 #modal.on .modal-sheet {
   transform: translateY(0);
 }
+
+/* ================= 3D BIKE RACING ARENA & HUD (PHASE 1) ================= */
+.race-container {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #3B1F4A;
+  touch-action: none;
+  z-index: 50;
+}
+
+#raceCanvasMount {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Top HUD Overlay */
+.race-hud-top {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.speedo-card {
+  background: rgba(42, 18, 64, 0.82);
+  backdrop-filter: blur(8px);
+  border: 2px solid var(--genda);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  color: #fff;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.speedo-num {
+  font-family: var(--font-display);
+  font-size: 32px;
+  color: var(--genda);
+  line-height: 1;
+}
+
+.speedo-unit {
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+}
+
+.nitro-card {
+  background: rgba(42, 18, 64, 0.82);
+  backdrop-filter: blur(8px);
+  border: 2px solid #38E1E4;
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 110px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.nitro-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 800;
+  color: #38E1E4;
+  text-transform: uppercase;
+}
+
+.nitro-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.nitro-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38E1E4, #00FFCC);
+  width: 100%;
+  transition: width 0.1s linear;
+}
+
+.race-hud-exit {
+  pointer-events: auto;
+  background: rgba(42, 18, 64, 0.8);
+  border: 1.5px solid rgba(255,255,255,0.3);
+  color: #fff;
+  border-radius: var(--radius-full);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Minimap Overlay (Phase 2) */
+.race-minimap-card {
+  position: absolute;
+  top: max(62px, calc(env(safe-area-inset-top) + 52px));
+  right: 12px;
+  background: rgba(30, 10, 48, 0.78);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-md);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+#raceMinimap {
+  width: 80px;
+  height: 80px;
+  display: block;
+}
+
+.race-lap-badge {
+  font-size: 10.5px;
+  font-weight: 900;
+  color: #FFB000;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Distance Lead Pill (Center Screen) */
+.race-lead-pill {
+  position: absolute;
+  top: max(62px, calc(env(safe-area-inset-top) + 52px));
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(26, 12, 40, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-full);
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition: color 0.2s ease;
+}
+
+/* Takedown & Wipeout Notification Banner (Phase 3) */
+.race-takedown-banner {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
+  padding: 14px 24px;
+  border-radius: var(--radius-lg);
+  text-align: center;
+  pointer-events: none;
+  z-index: 90;
+  opacity: 0;
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease;
+  min-width: 260px;
+}
+
+.race-takedown-banner.show {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+}
+
+.race-takedown-banner.rammer {
+  background: rgba(30, 10, 48, 0.94);
+  border: 3px solid var(--genda);
+  box-shadow: 0 0 35px rgba(255, 176, 0, 0.8);
+}
+
+.race-takedown-banner.rammer .takedown-title {
+  font-family: var(--font-display);
+  font-size: 34px;
+  color: var(--genda);
+  text-shadow: 2px 2px 0 #000;
+  line-height: 1;
+}
+
+.race-takedown-banner.rammer .takedown-sub {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  margin-top: 4px;
+}
+
+.race-takedown-banner.victim {
+  background: rgba(48, 10, 20, 0.94);
+  border: 3px solid #ff4444;
+  box-shadow: 0 0 35px rgba(255, 68, 68, 0.8);
+}
+
+.race-takedown-banner.victim .takedown-title {
+  font-family: var(--font-display);
+  font-size: 34px;
+  color: #ff4444;
+  text-shadow: 2px 2px 0 #000;
+  line-height: 1;
+}
+
+.race-takedown-banner.victim .takedown-sub {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  margin-top: 4px;
+}
+
+/* Touch Driving Controls (Bottom Thumb Ergonomics) */
+.race-controls-bottom {
+  position: absolute;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.steer-group, .pedal-group {
+  display: flex;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  border-radius: 50%;
+  border: 2.5px solid #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  color: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: transform 0.06s;
+  touch-action: none;
+}
+
+.touch-btn:active {
+  transform: scale(0.92);
+}
+
+.touch-btn.steer {
+  width: 62px;
+  height: 62px;
+  background: rgba(42, 18, 64, 0.85);
+  font-size: 24px;
+}
+
+.touch-btn.gas {
+  width: 72px;
+  height: 72px;
+  background: linear-gradient(135deg, #1B8F52, #2ecc71);
+  border-color: #A3FFC8;
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.touch-btn.brake {
+  width: 58px;
+  height: 58px;
+  background: linear-gradient(135deg, #C93C3C, #e74c3c);
+  border-color: #FFAAA6;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.touch-btn.nitro {
+  width: 58px;
+  height: 58px;
+  background: linear-gradient(135deg, #0B7A7C, #38E1E4);
+  border-color: #E0FFFF;
+  font-size: 12px;
+  text-transform: uppercase;
+  animation: pulse-nitro 1.5s infinite;
+}
+
+@keyframes pulse-nitro {
+  0%, 100% { box-shadow: 0 0 10px rgba(56, 225, 228, 0.6); }
+  50% { box-shadow: 0 0 20px rgba(56, 225, 228, 0.9); }
+}
+
+/* Game Mode Toggle Cards in Lobby */
+.game-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+
+.game-mode-tile {
+  background: var(--surface);
+  border: 2.5px solid var(--stroke);
+  border-radius: var(--radius-md);
+  padding: 12px 10px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--stroke);
+  transition: transform 0.1s;
+}
+
+.game-mode-tile:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--stroke);
+}
+
+.game-mode-tile.active {
+  border-color: var(--rani);
+  background: #FFF5F9;
+  outline: 2px solid var(--rani);
+  outline-offset: 2px;
+}
+
+.game-mode-tile .gm-icon {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.game-mode-tile .gm-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.game-mode-tile .gm-desc {
+  font-size: 11px;
+  color: var(--soft);
+  margin-top: 2px;
+}
+
+/* 3D Bike Theme Selection Grid */
+.bike-select-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.bike-card {
+  background: var(--surface);
+  border: 2px solid var(--stroke);
+  border-radius: var(--radius-md);
+  padding: 10px 8px;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 2.5px 0 var(--stroke);
+  transition: transform 0.1s, border-color 0.1s;
+}
+
+.bike-card:active {
+  transform: translateY(1.5px);
+  box-shadow: 0 1px 0 var(--stroke);
+}
+
+.bike-card.active {
+  border-color: var(--rani);
+  background: #FFF5F9;
+  outline: 2px solid var(--rani);
+  outline-offset: 2px;
+}
+
+.bike-card .bike-icon {
+  font-size: 26px;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.bike-card .bike-name {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.bike-card .bike-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--soft);
+  margin-top: 2px;
+}
+
+.bike-card .bike-color-bar {
+  height: 4px;
+  border-radius: 2px;
+  margin-top: 6px;
+  width: 100%;
+}
+
