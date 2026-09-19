@@ -1,0 +1,91 @@
+/* Jodi Sync Design Tokens */
+:root {
+  color-scheme: light;
+  
+  /* Indian Contemporary Jewel Palette */
+  --bg: #F6EEFF;
+  --bg2: #E8D8FA;
+  --surface: #FFFFFF;
+  --surface2: #FAF5FF;
+  --surface-raised: #FFFFFF;
+  
+  /* Ink & Typography */
+  --ink: #2A1240;
+  --soft: #6E5487;
+  --soft-light: #9B82B5;
+  --line: rgba(42, 18, 64, 0.14);
+  --edge: #2A1240;
+  --stroke: #2A1240;
+  --sh: #2A1240;
+  
+  /* Accent Colors */
+  --rani: #D6246E;
+  --on-rani: #FFFFFF;
+  --mor: #0B7A7C;
+  --on-mor: #FFFFFF;
+  --genda: #FFB000;
+  --on-genda: #2A1240;
+  --plum: #4B1D6B;
+  --on-plum: #FFF6E3;
+  --kesar: #FF6B35;
+  --on-kesar: #FFFFFF;
+  
+  /* Feedback */
+  --good: #1B8F52;
+  --good-soft: #D1F2DF;
+  --bad: #C93C3C;
+  --bad-soft: #FFDADA;
+  
+  /* Typography */
+  --font-display: 'Rozha One', 'Noto Serif Devanagari', Georgia, serif;
+  --font-body: 'Baloo 2', 'Noto Sans Devanagari', 'Nirmala UI', system-ui, -apple-system, sans-serif;
+  
+  /* Radii */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 26px;
+  --radius-full: 9999px;
+  
+  /* Garland & Motif Patterns */
+  --pat: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%234B1D6B' stroke-opacity='.06' stroke-width='1.5'%3E%3Cpath d='M24 3L45 24 24 45 3 24z'/%3E%3Ccircle cx='24' cy='24' r='4.5'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Dark Theme Overrides */
+:root[data-theme="dark"],
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #170A26;
+    --bg2: #0E0417;
+    --surface: #26133C;
+    --surface2: #311A4D;
+    --surface-raised: #3B215C;
+    
+    --ink: #FBF1E4;
+    --soft: #BCA7D6;
+    --soft-light: #8E78A8;
+    --line: rgba(251, 241, 228, 0.16);
+    --edge: #845FA8;
+    --stroke: #07020E;
+    --sh: #07020E;
+    
+    --rani: #FF5C9A;
+    --on-rani: #2A1240;
+    --mor: #38C7C1;
+    --on-mor: #042426;
+    --genda: #FFC233;
+    --on-genda: #2A1240;
+    --plum: #5D2B8A;
+    --on-plum: #FFF6E3;
+    --kesar: #FF8552;
+    --on-kesar: #2A1240;
+    
+    --good: #43D48A;
+    --good-soft: #14442D;
+    --bad: #FF7A7A;
+    --bad-soft: #4E2028;
+    
+    --pat: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%23FFFFFF' stroke-opacity='.04' stroke-width='1.5'%3E%3Cpath d='M24 3L45 24 24 45 3 24z'/%3E%3Ccircle cx='24' cy='24' r='4.5'/%3E%3C/g%3E%3C/svg%3E");
+  }
+}

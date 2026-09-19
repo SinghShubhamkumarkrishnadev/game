@@ -1,0 +1,19 @@
+{
+  "name": "Jodi Sync — Couple Game",
+  "short_name": "Jodi Sync",
+  "description": "The mobile game for Indian couples. Test your sync, play charades, and build your dream home together.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#170A26",
+  "theme_color": "#F6EEFF",
+  "lang": "en-IN",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
