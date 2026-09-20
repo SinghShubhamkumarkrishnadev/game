@@ -617,13 +617,12 @@
 
   /* Views Rendering */
   function renderHeader() {
-    var soundIcon = Audio.isMuted() ? '🔇' : '🔊';
     return '<div class="garland"></div>' +
       '<header class="app-header">' +
       '<div class="brand-title">Jodi Games <span class="brand-tag">Online</span></div>' +
       '<div class="header-actions">' +
       '<button class="icon-btn" data-action="openGuide" title="Khelne Ka Tareeka (User Guide)">📖</button>' +
-      '<button class="icon-btn" data-action="toggleSound" title="Sound Toggle">' + soundIcon + '</button>' +
+      '<button class="icon-btn" data-action="openSettings" title="Settings (⚙️)">⚙️</button>' +
       '</div></header>';
   }
 
@@ -694,11 +693,7 @@
           '<button class="btn alt" data-action="openJoinModal">Code Daalo 📲</button>' +
           '</div></div>'
         : '') +
-      '<div style="margin-top:auto;padding-top:16px;text-align:center;display:flex;flex-direction:column;gap:8px">' +
-      '<button class="btn gold sm" data-action="soloPracticeRace">🏍️ 3D Bike Test Drive (Solo)</button>' +
-      '<button class="btn alt sm" data-action="openGuide">📖 Khelne Ka Tareeka (User Guide)</button>' +
-      '<button class="btn ghost sm" data-action="editProfile">Naam Badlein</button>' +
-      '</div></section>';
+      '</section>';
   }
 
   // 3. Connected Room Lobby (With Game Mode & Bike Selector)
@@ -1153,9 +1148,102 @@
         '<button class="btn gold" style="flex:1" data-action="retryNativeInstall">Dubara Try Karein 🚀</button>' +
         '<button class="btn ghost" style="flex:1" data-action="closeModal">Theek Hai 👍</button>' +
         '</div></div></div>';
-      m.classList.add('on');
+      m.className = 'on';
+    } else if (state.modal === 'settings') {
+      var isMuted = Audio.isMuted();
+      var avs = ['💖', '🪔', '🦁', '👑', '🌸', '⚡', '🏍️', '🦋', '🌹', '🐯', '🍫', '🧸'];
+      var avHtml = '';
+      for (var a = 0; a < avs.length; a++) {
+        var isCur = (profile.avatar === avs[a]);
+        avHtml += '<button class="settings-av-btn ' + (isCur ? 'active' : '') + '" data-action="settingsPickAvatar" data-av="' + avs[a] + '">' + avs[a] + '</button>';
+      }
+
+      var currentBike = state.selectedBikeTheme || 'sport';
+      var bikes = [
+        { key: 'sport', name: 'Rani Neon Sport', icon: '🚀', desc: '1000cc Superbike' },
+        { key: 'bullet', name: 'Royal Bullet 350', icon: '🏍️', desc: 'Classic Cruiser' },
+        { key: 'turbo', name: 'Mor Teal Turbo', icon: '⚡', desc: 'Cyber Streetfighter' },
+        { key: 'cafe', name: 'Kesar Cafe Racer', icon: '☕', desc: 'Retro Vintage Racer' }
+      ];
+      var bikeHtml = '';
+      for (var b = 0; b < bikes.length; b++) {
+        var isB = (currentBike === bikes[b].key);
+        bikeHtml += '<div class="settings-bike-tile ' + (isB ? 'active' : '') + '" data-action="settingsPickBike" data-bike="' + bikes[b].key + '">' +
+          '<span class="sb-icon">' + bikes[b].icon + '</span>' +
+          '<div class="sb-text"><div class="sb-name">' + bikes[b].name + '</div><div class="sb-desc">' + bikes[b].desc + '</div></div>' +
+          (isB ? '<span class="sb-check">✓</span>' : '') +
+          '</div>';
+      }
+
+      m.innerHTML = '<aside class="settings-drawer" role="dialog" aria-label="Game Settings">' +
+        // Drawer Header
+        '<div class="settings-drawer-header">' +
+        '<div class="settings-drawer-title"><span>⚙️</span> Settings</div>' +
+        '<button class="drawer-close-btn" data-action="closeModal" aria-label="Close Settings">✕</button>' +
+        '</div>' +
+
+        // Drawer Content Scroll
+        '<div class="settings-drawer-scroll">' +
+
+        // Section 1: Profile & Name Change
+        '<div class="settings-card">' +
+        '<div class="settings-card-header">' +
+        '<span class="sch-icon">👤</span>' +
+        '<div><div class="sch-title">Aapka Naam &amp; Avatar</div><div class="sch-desc">Partner ko ye naam dikhega</div></div>' +
+        '</div>' +
+        '<div class="settings-profile-row">' +
+        '<span class="settings-profile-badge">' + profile.avatar + '</span>' +
+        '<input class="input-field" id="settingsNameInput" maxlength="20" placeholder="Apna naam daalein" value="' + esc(profile.name) + '">' +
+        '</div>' +
+        '<div class="settings-av-grid">' + avHtml + '</div>' +
+        '<button class="btn primary sm" style="width:100%;margin-top:10px" data-action="saveSettingsProfile">💾 Naam Save Karein</button>' +
+        '</div>' +
+
+        // Section 2: Sound & Audio Toggle
+        '<div class="settings-card">' +
+        '<div class="settings-card-header">' +
+        '<span class="sch-icon">' + (isMuted ? '🔇' : '🔊') + '</span>' +
+        '<div><div class="sch-title">Awaaz (Sound Effects)</div><div class="sch-desc">Tap, unlock aur race sounds</div></div>' +
+        '</div>' +
+        '<div class="settings-toggle-row">' +
+        '<span>Sound: <b>' + (isMuted ? 'Muted 🔇' : 'On 🔊') + '</b></span>' +
+        '<button class="btn ' + (isMuted ? 'gold' : 'alt') + ' sm" data-action="settingsToggleSound">' +
+        (isMuted ? 'Unmute 🔊' : 'Mute 🔇') +
+        '</button>' +
+        '</div>' +
+        '</div>' +
+
+        // Section 3: 3D Superbike Model
+        '<div class="settings-card">' +
+        '<div class="settings-card-header">' +
+        '<span class="sch-icon">🏍️</span>' +
+        '<div><div class="sch-title">Aapki 3D Superbike</div><div class="sch-desc">Apni manpasand bike chunein</div></div>' +
+        '</div>' +
+        '<div class="settings-bike-list">' + bikeHtml + '</div>' +
+        '</div>' +
+
+        // Section 4: Solo Practice Shortcut
+        '<div class="settings-card" style="background:linear-gradient(135deg, #FFF9EB, #FFF3D6);border-color:var(--genda)">' +
+        '<div class="settings-card-header">' +
+        '<span class="sch-icon">🏁</span>' +
+        '<div><div class="sch-title" style="color:var(--plum)">Solo Practice Race</div><div class="sch-desc">Akele 3D track par bike chalao</div></div>' +
+        '</div>' +
+        '<button class="btn gold sm" style="width:100%;margin-top:6px" data-action="settingsSoloPractice">3D Bike Test Drive 🚀</button>' +
+        '</div>' +
+
+        // Section 5: Guide & Install Links
+        '<div style="display:flex;flex-direction:column;gap:8px;padding-top:4px">' +
+        '<button class="btn ghost sm" data-action="openGuideFromSettings">📖 Khelne Ka Tareeka (User Guide)</button>' +
+        '<button class="btn ghost sm" data-action="installPwa">📲 Jodi App Install Karein</button>' +
+        '</div>' +
+
+        '<div class="settings-version-tag">Jodi Games v2.1 • Handcrafted with ❤️ for Couples</div>' +
+        '</div>' +
+        '</aside>';
+
+      m.className = 'drawer-mode on';
     } else {
-      m.classList.remove('on');
+      m.className = '';
       m.innerHTML = '';
     }
   }
@@ -1176,6 +1264,7 @@
 
     view.innerHTML = html;
     renderModal();
+    updatePwaBannerVisibility();
 
     if (state.screen === 'game') {
       bindCanvasEvents();
@@ -1276,6 +1365,11 @@
 
   /* User Actions Dispatcher */
   document.addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'modal') {
+      state.modal = null;
+      renderModal();
+      return;
+    }
     var target = e.target.closest('[data-action]');
     if (!target) return;
     var action = target.dataset.action;
@@ -1338,6 +1432,52 @@
         var jInp = $('#joinInput');
         if (jInp) jInp.focus();
       }, 100);
+    } else if (action === 'openSettings') {
+      Audio.playTap();
+      state.modal = 'settings';
+      renderModal();
+    } else if (action === 'saveSettingsProfile') {
+      Audio.playTap();
+      var sInp = $('#settingsNameInput');
+      var newName = sInp ? sInp.value.trim() : '';
+      if (!newName) {
+        toast('Kripya naam likhein!');
+        return;
+      }
+      profile.name = newName;
+      saveProfile();
+      toast('Profile update ho gayi: ' + newName + ' ✨');
+      render();
+    } else if (action === 'settingsPickAvatar') {
+      Audio.playTap();
+      profile.avatar = target.dataset.av;
+      saveProfile();
+      renderModal();
+    } else if (action === 'settingsToggleSound') {
+      var muted = Audio.toggleMuted();
+      toast(muted ? 'Sound Mute kiya gaya 🔇' : 'Sound On hai 🔊');
+      renderModal();
+    } else if (action === 'settingsPickBike') {
+      Audio.playTap();
+      var bVal = target.dataset.bike;
+      state.selectedBikeTheme = bVal;
+      if (Net.getStatus() === 'connected') {
+        Net.send('PARTNER_BIKE_CHOICE', { bike: bVal });
+      }
+      toast('Bike selected: ' + bVal);
+      renderModal();
+    } else if (action === 'settingsSoloPractice') {
+      Audio.playTap();
+      state.modal = null;
+      renderModal();
+      state.raceTrackSeed = Math.floor(Math.random() * 9000) + 1000;
+      state.screen = 'race';
+      render();
+    } else if (action === 'openGuideFromSettings') {
+      Audio.playTap();
+      state.modal = 'guide';
+      state.guideTab = 'scribble';
+      renderModal();
     } else if (action === 'closeModal') {
       Audio.playTap();
       state.modal = null;
@@ -1569,7 +1709,8 @@
   function updatePwaBannerVisibility() {
     var banner = document.getElementById('pwaInstallBanner');
     if (!banner) return;
-    if (isRunningStandalone() || isPwaDismissed || state.screen === 'race') {
+    var isHomeScreen = (state.screen === 'lobby' || state.screen === 'welcome');
+    if (isRunningStandalone() || isPwaDismissed || !isHomeScreen) {
       banner.style.display = 'none';
     } else {
       banner.style.display = 'flex';
