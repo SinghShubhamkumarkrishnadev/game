@@ -336,9 +336,11 @@
     // Calculate 3D Position & Heading from Spline for Player
     var safePlayerProgress = Math.max(0.0001, Math.min(0.9999, p.trackProgress));
     var trackPt = trackCurve.getPointAt(safePlayerProgress);
-    var tangent = trackCurve.getTangentAt(safePlayerProgress);
-    var up = new THREE.Vector3(0, 1, 0);
-    var binormal = up.clone().cross(tangent).normalize();
+    var tangent = trackCurve.getTangentAt(safePlayerProgress).normalize();
+    var worldUp = new THREE.Vector3(0, 1, 0);
+
+    // Road lateral lane vector
+    var binormal = worldUp.clone().cross(tangent).normalize();
 
     // Add lateral lane offset
     var finalPos = trackPt.clone().add(binormal.clone().multiplyScalar(p.lateralOffset * 6));
@@ -346,13 +348,14 @@
 
     if (playerBike) {
       playerBike.position.copy(finalPos);
-      playerBike.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
-      // Apply banking roll
+      playerBike.lookAt(finalPos.clone().add(tangent));
+
+      // Apply banking lean roll
       playerBike.rotateZ(p.tiltAngle);
 
-      // Steer front fork realistically: turning left rotates handlebar left
+      // Steer front fork: turning left rotates handlebar left, turning right rotates right
       if (playerBike.frontFork) {
-        playerBike.frontFork.rotation.y = -turnRate * 0.45;
+        playerBike.frontFork.rotation.y = turnRate * 0.45;
       }
 
       // Nitro exhaust flame animation
@@ -433,14 +436,15 @@
 
       var safePartProgress = Math.max(0.0001, Math.min(0.9999, partnerPhysics.trackProgress));
       var partPt = trackCurve.getPointAt(safePartProgress);
-      var partTan = trackCurve.getTangentAt(safePartProgress);
-      var partUp = new THREE.Vector3(0, 1, 0);
-      var partBinorm = partUp.clone().cross(partTan).normalize();
+      var partTan = trackCurve.getTangentAt(safePartProgress).normalize();
+      var partWorldUp = new THREE.Vector3(0, 1, 0);
+      var partBinorm = partWorldUp.clone().cross(partTan).normalize();
+
       var partFinalPos = partPt.clone().add(partBinorm.clone().multiplyScalar(partnerPhysics.lateralOffset * 6));
       partnerPhysics.pos.copy(partFinalPos);
 
       partnerBike.position.copy(partFinalPos);
-      partnerBike.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), partTan);
+      partnerBike.lookAt(partFinalPos.clone().add(partTan));
       partnerBike.rotateZ(partnerPhysics.tiltAngle);
 
       if (partnerBike.exhaustFlame) {
@@ -482,9 +486,9 @@
         var partnerSpd = (typeof partnerPhysics.speed === 'number') ? partnerPhysics.speed : 0;
         var speedDiff = p.speed - partnerSpd;
 
-        // A takedown requires real speed (> 16) AND either Nitro or closing speed advantage (> 7)
-        var pRamming = (p.speed > 16) && (p.isNitro || speedDiff > 7);
-        var partnerRamming = (partnerSpd > 16) && (partnerPhysics.isNitro || speedDiff < -7);
+        // A takedown strictly requires high-speed Nitro boost (> 25)
+        var pRamming = p.isNitro && (p.speed > 25);
+        var partnerRamming = partnerPhysics.isNitro && (partnerSpd > 25);
 
         if (pRamming && !partnerRamming) {
           // PLAYER RAMS PARTNER! (Thokne wale ko +50 pts, partner wipes out)
@@ -514,8 +518,7 @@
       bikePhysics.crashTimer -= delta;
       p.speed = 0;
       if (playerBike) {
-        playerBike.rotateZ(delta * 9);
-        playerBike.position.y = finalPos.y + Math.sin((2.0 - bikePhysics.crashTimer) * Math.PI) * 0.8;
+        playerBike.rotateZ(Math.sin((2.0 - bikePhysics.crashTimer) * Math.PI) * 0.45);
       }
       if (bikePhysics.crashTimer <= 0) {
         bikePhysics.isCrashed = false;
