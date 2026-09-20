@@ -1105,6 +1105,40 @@
         '</div>' +
         '</div>';
       m.classList.add('on');
+    } else if (state.modal === 'install_help') {
+      var isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      m.innerHTML = '<div class="modal-sheet install-modal-sheet">' +
+        '<div class="guide-header">' +
+        '<div class="guide-title"><span>📲</span> Jodi App Install Karein</div>' +
+        '<button class="pwa-dismiss-btn" data-action="closeModal" style="color:var(--plum);font-size:20px">✕</button>' +
+        '</div>' +
+        '<div class="install-prompt-body">' +
+        (isIos
+          ? '<div class="install-device-card">' +
+            '<div class="inst-platform-badge" style="background:#0B7A7C">🍎 iPhone / Safari</div>' +
+            '<div class="inst-lead">iPhone me direct install karne ke aasan steps:</div>' +
+            '<div class="inst-step-list">' +
+            '<div class="inst-step-item"><span class="inst-step-num">1</span><div>Safari screen ke bottom me <b>Share button (⎋)</b> par tap karein.</div></div>' +
+            '<div class="inst-step-item"><span class="inst-step-num">2</span><div>Options ko scroll karein aur <b>"Add to Home Screen (➕)"</b> chunein.</div></div>' +
+            '<div class="inst-step-item"><span class="inst-step-num">3</span><div>Upar right me <b>"Add"</b> dabayein — app home screen par aa jayegi!</div></div>' +
+            '</div></div>'
+          : '<div class="install-device-card">' +
+            '<div class="inst-platform-badge">🤖 Android / Chrome Phone</div>' +
+            '<div class="inst-lead">Chrome browser me direct install karne ke liye:</div>' +
+            '<div class="inst-step-list">' +
+            '<div class="inst-step-item"><span class="inst-step-num">1</span><div>Chrome browser ke upar right side me <b>3 Dots (⋮)</b> menu dabayein.</div></div>' +
+            '<div class="inst-step-item"><span class="inst-step-num">2</span><div>Menu me <b>"Install app"</b> ya <b>"Add to Home screen"</b> par tap karein.</div></div>' +
+            '<div class="inst-step-item"><span class="inst-step-num">3</span><div>Popup me <b>"Install"</b> confirm karein — app seedhe download ho jayegi!</div></div>' +
+            '</div></div>' +
+            '<div class="guide-badge-box">' +
+            '<span>💡 <b>Pehle se Install hai?</b> Agar aapne pehle install kar rakha hai, to aapke phone ki home screen par <b>"Jodi Games"</b> icon pehle se maujood hai — wahan se kholein!</span>' +
+            '</div>'
+        ) +
+        '<div style="display:flex;gap:8px;margin-top:14px">' +
+        '<button class="btn gold" style="flex:1" data-action="retryNativeInstall">Dubara Try Karein 🚀</button>' +
+        '<button class="btn ghost" style="flex:1" data-action="closeModal">Theek Hai 👍</button>' +
+        '</div></div></div>';
+      m.classList.add('on');
     } else {
       m.classList.remove('on');
       m.innerHTML = '';
@@ -1478,12 +1512,36 @@
     } else if (action === 'dismissPwaBanner') {
       isPwaDismissed = true;
       updatePwaBannerVisibility();
+    } else if (action === 'retryNativeInstall') {
+      Audio.playTap();
+      var pEvent = window.deferredInstallPrompt || deferredInstallPrompt;
+      if (pEvent) {
+        state.modal = null;
+        renderModal();
+        pEvent.prompt();
+        pEvent.userChoice.then(function (choice) {
+          if (choice.outcome === 'accepted') {
+            toast('Shukriya! Jodi App install ho raha hai... 📲');
+            isPwaDismissed = true;
+            updatePwaBannerVisibility();
+          }
+          window.deferredInstallPrompt = null;
+          deferredInstallPrompt = null;
+        });
+      } else {
+        toast('Chrome ke upar 3 dots (⋮) dabakar "Install app" chunein! 📲');
+      }
     }
   });
 
   /* ================= PWA INSTALLATION & AUTO-UPDATE ENGINE ================= */
-  var deferredInstallPrompt = null;
+  var deferredInstallPrompt = window.deferredInstallPrompt || null;
   var isPwaDismissed = false;
+
+  window.onDeferredPromptReady = function (e) {
+    deferredInstallPrompt = e;
+    updatePwaBannerVisibility();
+  };
 
   function isRunningStandalone() {
     return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
@@ -1501,20 +1559,21 @@
   }
 
   function handlePwaInstallClick() {
-    if (deferredInstallPrompt) {
-      deferredInstallPrompt.prompt();
-      deferredInstallPrompt.userChoice.then(function (choice) {
+    var promptEvent = window.deferredInstallPrompt || deferredInstallPrompt;
+    if (promptEvent) {
+      promptEvent.prompt();
+      promptEvent.userChoice.then(function (choice) {
         if (choice.outcome === 'accepted') {
           toast('Shukriya! Jodi App install ho raha hai... 📲');
           isPwaDismissed = true;
           updatePwaBannerVisibility();
         }
+        window.deferredInstallPrompt = null;
         deferredInstallPrompt = null;
       });
     } else {
-      // Guide fallback for iOS or non-prompting browsers
-      state.modal = 'guide';
-      state.guideTab = 'install';
+      // Show dedicated mobile install sheet with clear Chrome / Safari steps
+      state.modal = 'install_help';
       renderModal();
     }
   }
@@ -1522,39 +1581,46 @@
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     deferredInstallPrompt = e;
+    window.deferredInstallPrompt = e;
     updatePwaBannerVisibility();
   });
 
   window.addEventListener('appinstalled', function () {
     deferredInstallPrompt = null;
+    window.deferredInstallPrompt = null;
     isPwaDismissed = true;
     updatePwaBannerVisibility();
     toast('🎉 Jodi App successfully install ho gaya!');
   });
 
   // Service Worker Registration with Instant Auto-Update Check
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js').then(function (reg) {
-        // Query for SW updates every time site opens
-        reg.update();
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('./sw.js').then(function (reg) {
+      // Query for SW updates every time site opens
+      reg.update();
 
-        reg.addEventListener('updatefound', function () {
-          var newWorker = reg.installing;
-          if (!newWorker) return;
-          newWorker.addEventListener('statechange', function () {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              toast('🚀 Naya version update ho gaya! Refresh ho raha hai...');
-              setTimeout(function () {
-                window.location.reload();
-              }, 1200);
-            }
-          });
+      reg.addEventListener('updatefound', function () {
+        var newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener('statechange', function () {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            toast('🚀 Naya version update ho gaya! Refresh ho raha hai...');
+            setTimeout(function () {
+              window.location.reload();
+            }, 1200);
+          }
         });
-      }).catch(function (err) {
-        console.warn('[PWA] Service Worker registration:', err);
       });
+    }).catch(function (err) {
+      console.warn('[PWA] Service Worker registration:', err);
     });
+  }
+
+  if (document.readyState === 'complete') {
+    registerServiceWorker();
+  } else {
+    window.addEventListener('load', registerServiceWorker);
   }
 
   // Initial Boot

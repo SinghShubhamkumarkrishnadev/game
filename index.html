@@ -9,10 +9,24 @@
   <meta name="description" content="Intimate, live draw and guess game crafted specifically for long-distance Indian couples.">
   <meta name="theme-color" content="#F6EEFF">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Jodi Scribble">
+  <meta name="apple-mobile-web-app-title" content="Jodi Games">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="assets/icon.svg">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+
+  <!-- Early PWA Install Prompt Sniffer -->
+  <script>
+    window.deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      window.deferredInstallPrompt = e;
+      if (typeof window.onDeferredPromptReady === 'function') {
+        window.onDeferredPromptReady(e);
+      }
+    });
+  </script>
 
   <!-- Typography: Distinctive Indian Character (Rozha One + Baloo 2) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
