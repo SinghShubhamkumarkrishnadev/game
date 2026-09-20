@@ -132,6 +132,13 @@
   });
 
   Net.on('partnerDisconnected', function () {
+    if (state.screen === 'race') {
+      toast('Partner connection lost ⚠️ AI autopilot chal raha hai! Race continue karein.');
+      if (window.JodiRace && typeof window.JodiRace.setSoloAI === 'function') {
+        window.JodiRace.setSoloAI(true);
+      }
+      return; // DO NOT EXIT ACTIVE RACE!
+    }
     toast('Partner disconnect ho gaye 🔴');
     Audio.playMiss();
     if (window.JodiRace) window.JodiRace.cleanup();
@@ -191,6 +198,7 @@
   });
 
   Net.on('RACE_FINISH', function (payload) {
+    if (state.screen !== 'race') return;
     if (window.JodiRace) window.JodiRace.cleanup();
     state.raceResults = {
       winner: payload.winner,
@@ -950,8 +958,11 @@
       '<canvas id="raceMinimap" width="80" height="80"></canvas>' +
       '<div class="race-lap-badge" id="raceLapBadge">Lap 1/3</div>' +
       '</div>' +
-      // Distance Lead Indicator Pill
+      // Distance Lead Indicator Pill & Tilt Active Badge
+      '<div class="race-status-row">' +
       '<div class="race-lead-pill" id="raceLeadPill">🔥 Barabar</div>' +
+      '<div class="race-tilt-badge active" id="raceTiltBadge" title="Phone tilt karke bike turn karein">📱 Tilt Steer: Active</div>' +
+      '</div>' +
       // Takedown & Wipeout Notification Banner (Phase 3)
       '<div class="race-takedown-banner" id="raceTakedownBanner"></div>' +
       // Touch Driving Controls
@@ -1477,6 +1488,7 @@
       state.screen = 'race';
       render();
     } else if (action === 'exitRace') {
+      if (!window.confirm('Kya aap race chhod kar bahar jaana chahte hain?')) return;
       Audio.playTap();
       if (window.JodiRace) window.JodiRace.cleanup();
       if (Net.getStatus() === 'connected') {
@@ -1557,7 +1569,7 @@
   function updatePwaBannerVisibility() {
     var banner = document.getElementById('pwaInstallBanner');
     if (!banner) return;
-    if (isRunningStandalone() || isPwaDismissed) {
+    if (isRunningStandalone() || isPwaDismissed || state.screen === 'race') {
       banner.style.display = 'none';
     } else {
       banner.style.display = 'flex';

@@ -14,6 +14,18 @@
   var containerEl = null;
   var sparkParticles = null;
 
+  // Race & Lap Timing Safeties
+  var raceTimer = 0;
+  var playerLapTimer = 0;
+  var partnerLapTimer = 0;
+
+  // Mobile Device Orientation Gyroscope Tilt Steering
+  var currentTiltSteer = 0;
+  var targetTiltSteer = 0;
+  var hasTiltSensor = false;
+  var onKeyDownRef = null;
+  var onKeyUpRef = null;
+
   // Partner State & Interpolation
   var partnerPhysics = {
     pos: new THREE.Vector3(0, 0, 0),
@@ -93,19 +105,6 @@
 
     // Warm Atmosphere Fog
     scene.fog = new THREE.FogExp2(0x3B1F4A, 0.0028);
-
-    // Distant Terrain Ground
-    var groundGeom = new THREE.PlaneGeometry(2400, 2400);
-    var groundMat = new THREE.MeshStandardMaterial({
-      color: 0x221230,
-      roughness: 0.95,
-      metalness: 0.05
-    });
-    var ground = new THREE.Mesh(groundGeom, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -8;
-    ground.receiveShadow = true;
-    scene.add(ground);
   }
 
   /* ================= 2D MINIMAP & 3D NAMEPLATE SPRITE ================= */
@@ -290,16 +289,30 @@
       window.JodiRaceAudio.setRPM(speedRatio, isAccelerating);
     }
 
-    // Lateral Steering & Banking Lean
+    // Race Timers Update
+    raceTimer += delta;
+    playerLapTimer += delta;
+    partnerLapTimer += delta;
+
+    // Smooth Gyroscope Tilt Steering Interpolation
+    currentTiltSteer += (targetTiltSteer - currentTiltSteer) * Math.min(1, delta * 12);
+
+    // Lateral Steering: Left moves Left (+1), Right moves Right (-1)
     var turnRate = 0;
-    if (ctrl.left) turnRate -= 1;
-    if (ctrl.right) turnRate += 1;
+    if (ctrl.left) turnRate += 1;
+    if (ctrl.right) turnRate -= 1;
+
+    // Blend in Gyroscope Phone Tilt (seamless analog steering)
+    if (Math.abs(currentTiltSteer) > 0.035) {
+      turnRate += currentTiltSteer;
+      turnRate = Math.max(-1, Math.min(1, turnRate));
+    }
 
     var steerStrength = (p.speed / p.maxSpeed) * 1.8;
     p.lateralOffset = Math.max(-0.85, Math.min(0.85, p.lateralOffset + turnRate * steerStrength * delta));
 
-    // Natural banking lean into corners
-    var targetTilt = -turnRate * 0.45 * Math.min(1, Math.abs(p.speed) / 15);
+    // Natural banking lean into corners: turning left leans left (+Z roll)
+    var targetTilt = turnRate * 0.45 * Math.min(1, Math.abs(p.speed) / 15);
     p.tiltAngle += (targetTilt - p.tiltAngle) * delta * 8;
 
     // Progress along spline track
@@ -308,10 +321,13 @@
     p.trackProgress = (p.trackProgress + deltaProgress) % 1.0;
     if (p.trackProgress < 0) p.trackProgress += 1.0;
 
-    // Lap progress tracking for Player
+    // Lap progress tracking for Player with minimum 10.0s lap gate
     if (p.lastTrackProgress > 0.85 && p.trackProgress < 0.15 && p.speed > 0) {
-      raceState.playerLap++;
-      if (window.JodiAudio) window.JodiAudio.playUnlock();
+      if (playerLapTimer >= 10.0) {
+        raceState.playerLap++;
+        playerLapTimer = 0;
+        if (window.JodiAudio) window.JodiAudio.playUnlock();
+      }
     } else if (p.lastTrackProgress < 0.15 && p.trackProgress > 0.85 && p.speed < 0) {
       raceState.playerLap = Math.max(1, raceState.playerLap - 1);
     }
@@ -334,7 +350,7 @@
       // Apply banking roll
       playerBike.rotateZ(p.tiltAngle);
 
-      // Steer front fork realistically
+      // Steer front fork realistically: turning left rotates handlebar left
       if (playerBike.frontFork) {
         playerBike.frontFork.rotation.y = -turnRate * 0.45;
       }
@@ -358,14 +374,19 @@
     }
 
     // Dynamic 3rd-Person Chase Camera
-    var camDistance = 11 + (p.isNitro ? 3 : 0);
-    var camHeight = 4.2;
+    var camDistance = 9.2 + (p.isNitro ? 2.2 : 0);
+    var camHeight = 3.6;
     var camPos = finalPos.clone()
       .sub(tangent.clone().multiplyScalar(camDistance))
       .add(new THREE.Vector3(0, camHeight, 0));
 
+    // Prevent chase camera from dipping below the road surface on steep slopes
+    if (camPos.y < finalPos.y + 1.6) {
+      camPos.y = finalPos.y + 1.6;
+    }
+
     camera.position.lerp(camPos, delta * 8);
-    camera.lookAt(finalPos.clone().add(new THREE.Vector3(0, 1.8, 0)).add(tangent.clone().multiplyScalar(6)));
+    camera.lookAt(finalPos.clone().add(new THREE.Vector3(0, 1.6, 0)).add(tangent.clone().multiplyScalar(6)));
 
     // ================= PARTNER BIKE UPDATE =================
     if (partnerBike && trackCurve) {
@@ -378,7 +399,10 @@
         partnerPhysics.tiltAngle = -Math.cos(Date.now() * 0.0015) * 0.25;
 
         if (partnerPhysics.lastTrackProgress > 0.85 && partnerPhysics.trackProgress < 0.15) {
-          raceState.partnerLap++;
+          if (partnerLapTimer >= 10.0) {
+            raceState.partnerLap++;
+            partnerLapTimer = 0;
+          }
         }
         partnerPhysics.lastTrackProgress = partnerPhysics.trackProgress;
       } else {
@@ -708,20 +732,31 @@
     // Bind Controls
     bindControls();
 
-    // Animation Loop
+    raceTimer = 0;
+    playerLapTimer = 0;
+    partnerLapTimer = 0;
+    currentTiltSteer = 0;
+    targetTiltSteer = 0;
+
+    // Animation Loop with Defensive Exception Protection
     isRunning = true;
     var clock = new THREE.Clock();
 
     function animate() {
       if (!isRunning) return;
       animFrameId = requestAnimationFrame(animate);
-      var delta = Math.min(clock.getDelta(), 0.05);
-      updatePhysics(delta);
-      renderer.render(scene, camera);
+      try {
+        var delta = Math.min(clock.getDelta(), 0.05);
+        updatePhysics(delta);
+        renderer.render(scene, camera);
+      } catch (loopErr) {
+        console.warn('Race tick warning:', loopErr);
+      }
     }
     animate();
 
     window.addEventListener('resize', onWindowResize);
+    setupTiltSensor();
   }
 
   function onWindowResize() {
@@ -731,41 +766,96 @@
     renderer.setSize(containerEl.clientWidth, containerEl.clientHeight);
   }
 
+  // Device Orientation Gyroscope Tilt Handler
+  function onDeviceOrientation(e) {
+    if (e.gamma === null || e.gamma === undefined) return;
+    hasTiltSensor = true;
+    var gamma = e.gamma; // -90 to +90 degrees roll in portrait
+
+    // Deadzone of 3.2 degrees to prevent resting tremor
+    if (Math.abs(gamma) < 3.2) {
+      targetTiltSteer = 0;
+    } else {
+      // Tilting left: gamma is negative (e.g. -15°).
+      // Left turn needs positive turnRate, so targetTiltSteer is POSITIVE (+).
+      // Tilting right: gamma is positive (e.g. +15°).
+      // Right turn needs negative turnRate, so targetTiltSteer is NEGATIVE (-).
+      var raw = (gamma - Math.sign(gamma) * 3.2) / 20;
+      targetTiltSteer = -Math.max(-1, Math.min(1, raw));
+    }
+
+    var badge = document.getElementById('raceTiltBadge');
+    if (badge && !badge.classList.contains('active')) {
+      badge.classList.add('active');
+    }
+  }
+
+  function setupTiltSensor() {
+    if (typeof window.DeviceOrientationEvent !== 'undefined' && typeof window.DeviceOrientationEvent.requestPermission === 'function') {
+      // iOS 13+ requires user gesture request
+      window.DeviceOrientationEvent.requestPermission().then(function (state) {
+        if (state === 'granted') {
+          window.addEventListener('deviceorientation', onDeviceOrientation, true);
+        }
+      }).catch(function () {});
+    } else if (window.DeviceOrientationEvent) {
+      window.addEventListener('deviceorientation', onDeviceOrientation, true);
+    }
+  }
+
   function bindControls() {
-    function onKeyDown(e) {
+    onKeyDownRef = function (e) {
       if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') bikePhysics.controls.gas = true;
       if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') bikePhysics.controls.brake = true;
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') bikePhysics.controls.left = true;
       if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') bikePhysics.controls.right = true;
       if (e.key === 'Shift') bikePhysics.controls.nitro = true;
-    }
+    };
 
-    function onKeyUp(e) {
+    onKeyUpRef = function (e) {
       if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') bikePhysics.controls.gas = false;
       if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') bikePhysics.controls.brake = false;
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') bikePhysics.controls.left = false;
       if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') bikePhysics.controls.right = false;
       if (e.key === 'Shift') bikePhysics.controls.nitro = false;
-    }
+    };
 
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('keydown', onKeyDownRef);
+    window.addEventListener('keyup', onKeyUpRef);
 
-    // Mobile Touch Driving Controls
+    // Modern Multi-Touch Driving Controls (Pointer Events + Pointer Capture)
+    // Ensures holding Gas with one thumb and pressing Steer/Nitro with the other NEVER cancels Gas!
     function setupTouchBtn(btnId, controlKey) {
       var el = document.getElementById(btnId);
       if (!el) return;
-      el.addEventListener('touchstart', function (e) {
+
+      var activePointers = new Set();
+
+      function onPointerDown(e) {
         e.preventDefault();
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
+        activePointers.add(e.pointerId);
         bikePhysics.controls[controlKey] = true;
-      }, { passive: false });
-      el.addEventListener('touchend', function (e) {
+
+        setupTiltSensor();
+        if (controlKey === 'gas' && window.JodiRaceAudio) {
+          window.JodiRaceAudio.ensureContext();
+        }
+      }
+
+      function onPointerEnd(e) {
         e.preventDefault();
-        bikePhysics.controls[controlKey] = false;
-      }, { passive: false });
-      el.addEventListener('mousedown', function () { bikePhysics.controls[controlKey] = true; });
-      el.addEventListener('mouseup', function () { bikePhysics.controls[controlKey] = false; });
-      el.addEventListener('mouseleave', function () { bikePhysics.controls[controlKey] = false; });
+        try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+        activePointers.delete(e.pointerId);
+        if (activePointers.size === 0) {
+          bikePhysics.controls[controlKey] = false;
+        }
+      }
+
+      el.addEventListener('pointerdown', onPointerDown, { passive: false });
+      el.addEventListener('pointerup', onPointerEnd, { passive: false });
+      el.addEventListener('pointercancel', onPointerEnd, { passive: false });
+      el.addEventListener('lostpointercapture', onPointerEnd, { passive: false });
     }
 
     setupTouchBtn('btnSteerL', 'left');
@@ -785,6 +875,10 @@
       window.JodiRaceAudio.stop();
     }
     window.removeEventListener('resize', onWindowResize);
+    if (onKeyDownRef) window.removeEventListener('keydown', onKeyDownRef);
+    if (onKeyUpRef) window.removeEventListener('keyup', onKeyUpRef);
+    window.removeEventListener('deviceorientation', onDeviceOrientation, true);
+
     if (renderer && renderer.domElement && renderer.domElement.parentNode) {
       renderer.domElement.parentNode.removeChild(renderer.domElement);
       renderer.dispose();
@@ -868,6 +962,9 @@
   global.JodiRace = {
     init: initRace,
     cleanup: cleanupRace,
+    setSoloAI: function (val) { raceState.isSoloAI = !!val; },
+    setupTiltSensor: setupTiltSensor,
+    hasTilt: function () { return hasTiltSensor; },
     get BIKE_THEMES() {
       return (window.JodiRaceModels && window.JodiRaceModels.BIKE_THEMES) || {};
     },

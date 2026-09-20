@@ -89,63 +89,66 @@
   // spokeStyle: 'wire' | 'alloy' | 'slick'
   function createWheel(mats, opts) {
     opts = opts || {};
-    var tireR = opts.tireR || 0.72;
-    var tubeR = opts.tubeR || 0.22;
-    var rimR = opts.rimR || 0.48;
+    var tireR = opts.tireR || 0.60;
+    var tubeR = opts.tubeR || 0.12;
+    var rimR = opts.rimR || 0.44;
     var spokeStyle = opts.spokeStyle || 'alloy';
     var wGroup = new THREE.Group();
 
-    var tire = new THREE.Mesh(new THREE.TorusGeometry(tireR, tubeR, 10, 28), mats.tire);
+    // Tire Torus in YZ-plane (rotated by Math.PI / 2 around Y so axle is X)
+    var tireGeo = new THREE.TorusGeometry(tireR, tubeR, 12, 32);
+    tireGeo.rotateY(Math.PI / 2);
+    var tire = new THREE.Mesh(tireGeo, mats.tire);
     tire.castShadow = true;
     wGroup.add(tire);
 
-    var hub = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.34, 12), mats.darkMetal);
-    hub.rotation.x = Math.PI / 2;
+    // Wheel Hub along X-axis
+    var hubGeo = new THREE.CylinderGeometry(0.09, 0.09, tubeR * 2.4, 14);
+    hubGeo.rotateZ(Math.PI / 2);
+    var hub = new THREE.Mesh(hubGeo, mats.darkMetal);
     wGroup.add(hub);
 
+    // Rim ring in YZ-plane
+    var rimGeo = new THREE.TorusGeometry(rimR, 0.035, 10, 32);
+    rimGeo.rotateY(Math.PI / 2);
+    var rimMesh = new THREE.Mesh(rimGeo, mats.chrome);
+    wGroup.add(rimMesh);
+
+    // Spokes in YZ-plane
     if (spokeStyle === 'wire') {
       var spokeCount = 24;
       for (var i = 0; i < spokeCount; i++) {
-        var spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, rimR * 0.95, 4), mats.chrome);
         var ang = (i / spokeCount) * Math.PI * 2;
-        spoke.position.set(Math.cos(ang) * (rimR * 0.95) / 2, Math.sin(ang) * (rimR * 0.95) / 2, 0);
-        spoke.rotation.z = ang + Math.PI / 2;
+        var spokeGeo = new THREE.CylinderGeometry(0.008, 0.008, rimR * 0.95, 4);
+        var spoke = new THREE.Mesh(spokeGeo, mats.chrome);
+        spoke.position.set(0, Math.cos(ang) * (rimR * 0.475), Math.sin(ang) * (rimR * 0.475));
+        spoke.rotation.x = ang;
         wGroup.add(spoke);
       }
-      var rimWire = new THREE.Mesh(new THREE.TorusGeometry(rimR, 0.032, 8, 24), mats.chrome);
-      wGroup.add(rimWire);
     } else if (spokeStyle === 'slick') {
-      var rimSlick = new THREE.Mesh(new THREE.CylinderGeometry(rimR * 0.92, rimR * 0.92, 0.2, 6), mats.darkMetal);
-      rimSlick.rotation.x = Math.PI / 2;
-      wGroup.add(rimSlick);
       for (var s = 0; s < 5; s++) {
-        var cut = new THREE.Mesh(new THREE.BoxGeometry(0.05, rimR * 1.5, 0.24), mats.tire);
-        cut.rotation.z = (s / 5) * Math.PI * 2;
+        var sAng = (s / 5) * Math.PI * 2;
+        var cut = new THREE.Mesh(new THREE.BoxGeometry(0.05, rimR * 0.88, tubeR * 0.45), mats.darkMetal);
+        cut.position.set(0, Math.cos(sAng) * (rimR * 0.44), Math.sin(sAng) * (rimR * 0.44));
+        cut.rotation.x = sAng;
         wGroup.add(cut);
       }
     } else {
-      var rimAlloy = new THREE.Mesh(new THREE.CylinderGeometry(rimR, rimR, 0.2, 6), mats.chrome);
-      rimAlloy.rotation.x = Math.PI / 2;
-      wGroup.add(rimAlloy);
       for (var j = 0; j < 5; j++) {
-        var sp = new THREE.Mesh(new THREE.BoxGeometry(0.06, rimR * 1.75, 0.17), mats.chrome);
-        sp.rotation.z = (j / 5) * Math.PI * 2;
+        var jAng = (j / 5) * Math.PI * 2;
+        var sp = new THREE.Mesh(new THREE.BoxGeometry(0.04, rimR * 0.88, tubeR * 0.45), mats.chrome);
+        sp.position.set(0, Math.cos(jAng) * (rimR * 0.44), Math.sin(jAng) * (rimR * 0.44));
+        sp.rotation.x = jAng;
         wGroup.add(sp);
       }
     }
 
-    var disc = new THREE.Mesh(new THREE.CylinderGeometry(rimR * 0.78, rimR * 0.78, 0.03, 20, 1, false), mats.chrome);
-    disc.rotation.x = Math.PI / 2;
-    disc.position.z = tubeR * 0.85;
+    // Ventilated Brake Disc in YZ-plane
+    var discGeo = new THREE.CylinderGeometry(rimR * 0.72, rimR * 0.72, 0.025, 20);
+    discGeo.rotateZ(Math.PI / 2);
+    var disc = new THREE.Mesh(discGeo, mats.chrome);
+    disc.position.x = tubeR * 0.88;
     wGroup.add(disc);
-    // ventilation holes (approximated by small dark ring)
-    var ventRing = new THREE.Mesh(new THREE.TorusGeometry(rimR * 0.6, 0.015, 6, 20), mats.darkMetal);
-    ventRing.position.z = tubeR * 0.85 + 0.001;
-    wGroup.add(ventRing);
-
-    var caliper = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.24, 0.13), opts.caliperMat || mats.accent);
-    caliper.position.set(0, rimR * 0.78, tubeR * 0.85);
-    wGroup.add(caliper);
 
     return wGroup;
   }
@@ -448,21 +451,21 @@
     var bike = new THREE.Group();
 
     // Rear wheel - wire spoke, deep chrome fender
-    var rearWheel = createWheel(mats, { spokeStyle: 'wire', tireR: 0.74, tubeR: 0.24, rimR: 0.5, caliperMat: mats.accent });
-    rearWheel.position.set(0, 0.74, -1.3);
+    var rearWheel = createWheel(mats, { spokeStyle: 'wire', tireR: 0.60, tubeR: 0.12, rimR: 0.44 });
+    rearWheel.position.set(0, 0.72, -1.3);
     bike.add(rearWheel);
     bike.rearWheel = rearWheel;
 
-    var rearFender = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.86, 0.34, 16, 1, true, 0, Math.PI * 0.95), mats.chrome);
+    var rearFender = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 0.22, 16, 1, true, 0, Math.PI * 0.95), mats.chrome);
     rearFender.rotation.z = Math.PI / 2;
-    rearFender.position.set(0, 1.05, -1.55);
+    rearFender.position.set(0, 0.76, -1.35);
     bike.add(rearFender);
 
     // Front fork assembly
     var frontFork = new THREE.Group();
     frontFork.position.set(0, 0, 1.4);
-    var frontWheel = createWheel(mats, { spokeStyle: 'wire', tireR: 0.74, tubeR: 0.24, rimR: 0.5, caliperMat: mats.accent });
-    frontWheel.position.set(0, 0.74, 0);
+    var frontWheel = createWheel(mats, { spokeStyle: 'wire', tireR: 0.60, tubeR: 0.12, rimR: 0.44 });
+    frontWheel.position.set(0, 0.72, 0);
     frontFork.add(frontWheel);
     bike.frontWheel = frontWheel;
 
@@ -474,9 +477,9 @@
     forkR.rotation.x = -Math.PI / 9;
     frontFork.add(forkL, forkR);
 
-    var frontFender = new THREE.Mesh(new THREE.CylinderGeometry(0.82, 0.82, 0.3, 16, 1, true, Math.PI * 0.15, Math.PI * 0.8), mats.chrome);
+    var frontFender = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 0.22, 16, 1, true, Math.PI * 0.15, Math.PI * 0.8), mats.chrome);
     frontFender.rotation.z = Math.PI / 2;
-    frontFender.position.set(0, 1.05, 0.05);
+    frontFender.position.set(0, 0.76, 0.05);
     frontFork.add(frontFender);
 
     // Round chrome headlight nacelle
@@ -574,20 +577,20 @@
   function buildSportBike(mats) {
     var bike = new THREE.Group();
 
-    var rearWheel = createWheel(mats, { spokeStyle: 'alloy', tireR: 0.72, tubeR: 0.24, rimR: 0.46 });
+    var rearWheel = createWheel(mats, { spokeStyle: 'alloy', tireR: 0.60, tubeR: 0.12, rimR: 0.44 });
     rearWheel.position.set(0, 0.72, -1.3);
     bike.add(rearWheel);
     bike.rearWheel = rearWheel;
 
-    var hugger = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.4, 12, 1, true, 0, Math.PI * 0.6), mats.body);
+    var hugger = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 0.24, 12, 1, true, 0, Math.PI * 0.6), mats.body);
     hugger.rotation.z = Math.PI / 2;
-    hugger.position.set(0, 0.95, -1.5);
+    hugger.position.set(0, 0.76, -1.35);
     bike.add(hugger);
 
     var frontFork = new THREE.Group();
     frontFork.position.set(0, 0, 1.4);
-    var frontWheel = createWheel(mats, { spokeStyle: 'alloy', tireR: 0.7, tubeR: 0.22, rimR: 0.44 });
-    frontWheel.position.set(0, 0.7, 0);
+    var frontWheel = createWheel(mats, { spokeStyle: 'alloy', tireR: 0.60, tubeR: 0.12, rimR: 0.44 });
+    frontWheel.position.set(0, 0.72, 0);
     frontFork.add(frontWheel);
     bike.frontWheel = frontWheel;
 
@@ -701,16 +704,16 @@
     var bike = new THREE.Group();
     var neonMat = new THREE.MeshBasicMaterial({ color: 0x38E1E4 });
 
-    // chunky extra-wide rear slick
-    var rearWheel = createWheel(mats, { spokeStyle: 'slick', tireR: 0.82, tubeR: 0.3, rimR: 0.5 });
-    rearWheel.position.set(0, 0.82, -1.3);
+    // sleek wide rear slick
+    var rearWheel = createWheel(mats, { spokeStyle: 'slick', tireR: 0.60, tubeR: 0.14, rimR: 0.44 });
+    rearWheel.position.set(0, 0.72, -1.3);
     bike.add(rearWheel);
     bike.rearWheel = rearWheel;
 
     var frontFork = new THREE.Group();
     frontFork.position.set(0, 0, 1.4);
-    var frontWheel = createWheel(mats, { spokeStyle: 'alloy', tireR: 0.68, tubeR: 0.2, rimR: 0.42 });
-    frontWheel.position.set(0, 0.68, 0);
+    var frontWheel = createWheel(mats, { spokeStyle: 'alloy', tireR: 0.60, tubeR: 0.12, rimR: 0.44 });
+    frontWheel.position.set(0, 0.72, 0);
     frontFork.add(frontWheel);
     bike.frontWheel = frontWheel;
 
@@ -828,19 +831,19 @@
   function buildCafeBike(mats) {
     var bike = new THREE.Group();
 
-    var rearWheel = createWheel(mats, { spokeStyle: 'alloy', tireR: 0.72, tubeR: 0.22, rimR: 0.46, caliperMat: mats.gold });
+    var rearWheel = createWheel(mats, { spokeStyle: 'alloy', tireR: 0.60, tubeR: 0.12, rimR: 0.44 });
     rearWheel.position.set(0, 0.72, -1.3);
     bike.add(rearWheel);
     bike.rearWheel = rearWheel;
 
-    var smallFenderR = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.16, 14, 1, true, 0, Math.PI * 0.5), mats.darkMetal);
+    var smallFenderR = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 0.16, 14, 1, true, 0, Math.PI * 0.5), mats.darkMetal);
     smallFenderR.rotation.z = Math.PI / 2;
-    smallFenderR.position.set(0, 1.0, -1.5);
+    smallFenderR.position.set(0, 0.76, -1.35);
     bike.add(smallFenderR);
 
     var frontFork = new THREE.Group();
     frontFork.position.set(0, 0, 1.4);
-    var frontWheel = createWheel(mats, { spokeStyle: 'alloy', tireR: 0.72, tubeR: 0.22, rimR: 0.46, caliperMat: mats.gold });
+    var frontWheel = createWheel(mats, { spokeStyle: 'alloy', tireR: 0.60, tubeR: 0.12, rimR: 0.44 });
     frontWheel.position.set(0, 0.72, 0);
     frontFork.add(frontWheel);
     bike.frontWheel = frontWheel;
@@ -854,9 +857,9 @@
     forkR.rotation.x = -Math.PI / 8.5;
     frontFork.add(forkL, forkR);
 
-    var smallFenderF = new THREE.Mesh(new THREE.CylinderGeometry(0.76, 0.76, 0.14, 14, 1, true, Math.PI * 0.2, Math.PI * 0.7), mats.darkMetal);
+    var smallFenderF = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 0.16, 14, 1, true, Math.PI * 0.2, Math.PI * 0.7), mats.darkMetal);
     smallFenderF.rotation.z = Math.PI / 2;
-    smallFenderF.position.set(0, 1.0, 0.02);
+    smallFenderF.position.set(0, 0.76, 0.02);
     frontFork.add(smallFenderF);
 
     var headRig = createHeadlightRig(mats, 'round-single');

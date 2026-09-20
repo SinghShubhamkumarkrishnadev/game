@@ -893,13 +893,21 @@ html, body {
   text-transform: uppercase;
 }
 
-/* Distance Lead Pill (Center Screen) */
-.race-lead-pill {
+/* Status Row: Distance Pill & Tilt Indicator */
+.race-status-row {
   position: absolute;
   top: max(62px, calc(env(safe-area-inset-top) + 52px));
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(26, 12, 40, 0.85);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.race-lead-pill {
+  background: rgba(26, 12, 40, 0.88);
   backdrop-filter: blur(8px);
   border: 1.5px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--radius-full);
@@ -908,10 +916,21 @@ html, body {
   font-weight: 800;
   color: #fff;
   white-space: nowrap;
-  pointer-events: none;
-  z-index: 10;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   transition: color 0.2s ease;
+}
+
+.race-tilt-badge {
+  background: rgba(11, 122, 124, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid #38E1E4;
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #E0FFFF;
+  white-space: nowrap;
+  box-shadow: 0 0 10px rgba(56, 225, 228, 0.4);
 }
 
 /* Takedown & Wipeout Notification Banner (Phase 3) */
@@ -1005,6 +1024,7 @@ html, body {
   color: #fff;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
   cursor: pointer;
   transition: transform 0.06s;
