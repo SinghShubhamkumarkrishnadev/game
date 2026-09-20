@@ -126,6 +126,8 @@
     Audio.playUnlock();
     burstCenter(24);
     toast('Partner jud gaye! 🟢 Dono sync hain');
+    // Exchange bike themes immediately upon connection
+    Net.send('PARTNER_BIKE_CHOICE', { bike: state.selectedBikeTheme });
     render();
   });
 
@@ -160,6 +162,8 @@
     state.raceTrackSeed = payload.seed;
     if (payload.bike && !Net.isHostUser()) {
       state.partnerBikeTheme = payload.bike;
+      // Guest informs host of guest's bike choice
+      Net.send('PARTNER_BIKE_CHOICE', { bike: state.selectedBikeTheme });
     }
     state.screen = 'race';
     Audio.playTap();
@@ -1170,11 +1174,13 @@
       var mount = $('#raceCanvasMount');
       if (mount && window.JodiRace) {
         var isConnected = Net.getStatus() === 'connected';
+        var isHost = isConnected ? Net.isHostUser() : true;
         var partnerOpts = {
           name: isConnected ? (Net.getPartnerName() || 'Partner') : 'AI Racer (Solo)',
           avatar: isConnected ? (Net.getPartnerAvatar() || '✨') : '🤖',
           theme: state.partnerBikeTheme || 'bullet',
-          isSoloAI: !isConnected
+          isSoloAI: !isConnected,
+          isHost: isHost
         };
         window.JodiRace.init(mount, state.selectedBikeTheme, state.raceTrackSeed, partnerOpts);
 

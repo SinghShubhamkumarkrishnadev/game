@@ -776,8 +776,9 @@
     p.lastTrackProgress = p.trackProgress;
 
     // Calculate 3D Position & Heading from Spline for Player
-    var trackPt = trackCurve.getPointAt(p.trackProgress);
-    var tangent = trackCurve.getTangentAt(p.trackProgress);
+    var safePlayerProgress = Math.max(0.0001, Math.min(0.9999, p.trackProgress));
+    var trackPt = trackCurve.getPointAt(safePlayerProgress);
+    var tangent = trackCurve.getTangentAt(safePlayerProgress);
     var up = new THREE.Vector3(0, 1, 0);
     var binormal = up.clone().cross(tangent).normalize();
 
@@ -839,15 +840,34 @@
         }
         partnerPhysics.lastTrackProgress = partnerPhysics.trackProgress;
       } else {
-        // High-precision smooth multiplayer lerping
-        var pT = Math.min(1, delta * 12);
-        partnerPhysics.trackProgress += (partnerPhysics.targetProgress - partnerPhysics.trackProgress) * pT;
+        // High-precision smooth multiplayer lerping with forward extrapolation
+        if (partnerPhysics.speed > 0 && !partnerPhysics.isCrashed) {
+          var forwardEst = (partnerPhysics.speed * delta) / totalCurveLen;
+          partnerPhysics.targetProgress = (partnerPhysics.targetProgress + forwardEst) % 1.0;
+        }
+
+        var pT = Math.min(1, delta * 14);
+        var diffProgress = partnerPhysics.targetProgress - partnerPhysics.trackProgress;
+        // Handle wrap-around across 0.0 <-> 1.0 boundary
+        if (diffProgress > 0.5) {
+          diffProgress -= 1.0;
+        } else if (diffProgress < -0.5) {
+          diffProgress += 1.0;
+        }
+
+        partnerPhysics.trackProgress = (partnerPhysics.trackProgress + diffProgress * pT + 1.0) % 1.0;
         partnerPhysics.lateralOffset += (partnerPhysics.targetLateralOffset - partnerPhysics.lateralOffset) * pT;
         partnerPhysics.tiltAngle += (partnerPhysics.targetTiltAngle - partnerPhysics.tiltAngle) * pT;
+
+        if (partnerPhysics.lastTrackProgress > 0.85 && partnerPhysics.trackProgress < 0.15) {
+          // Cross lap line
+        }
+        partnerPhysics.lastTrackProgress = partnerPhysics.trackProgress;
       }
 
-      var partPt = trackCurve.getPointAt(partnerPhysics.trackProgress);
-      var partTan = trackCurve.getTangentAt(partnerPhysics.trackProgress);
+      var safePartProgress = Math.max(0.0001, Math.min(0.9999, partnerPhysics.trackProgress));
+      var partPt = trackCurve.getPointAt(safePartProgress);
+      var partTan = trackCurve.getTangentAt(safePartProgress);
       var partUp = new THREE.Vector3(0, 1, 0);
       var partBinorm = partUp.clone().cross(partTan).normalize();
       var partFinalPos = partPt.clone().add(partBinorm.clone().multiplyScalar(partnerPhysics.lateralOffset * 6));
@@ -892,19 +912,33 @@
     // Check collision between Player & Partner
     if (playerBike && partnerBike && !bikePhysics.isCrashed && !partnerPhysics.isCrashed && bikePhysics.collisionCooldown <= 0) {
       var collisionDist = p.pos.distanceTo(partnerPhysics.pos);
-      if (collisionDist < 2.8) {
-        var speedDiff = p.speed - (partnerPhysics.speed || 30);
-        if (p.isNitro || speedDiff > 8) {
-          // PLAYER RAMS PARTNER! (Thokne wale ko +50 pts, dusra gir jaayega)
-          triggerTakedown('player', 'partner');
-        } else if (partnerPhysics.isNitro || speedDiff < -8) {
-          // PARTNER RAMS PLAYER!
-          triggerTakedown('partner', 'player');
+      if (collisionDist < 2.2) {
+        var partnerSpd = (typeof partnerPhysics.speed === 'number') ? partnerPhysics.speed : 0;
+        var speedDiff = p.speed - partnerSpd;
+
+        // A takedown requires real speed (> 16) AND either Nitro or closing speed advantage (> 7)
+        var pRamming = (p.speed > 16) && (p.isNitro || speedDiff > 7);
+        var partnerRamming = (partnerSpd > 16) && (partnerPhysics.isNitro || speedDiff < -7);
+
+        if (pRamming && !partnerRamming) {
+          // PLAYER RAMS PARTNER! (Thokne wale ko +50 pts, partner wipes out)
+          triggerTakedown('player', 'partner', false);
+        } else if (partnerRamming && !pRamming) {
+          // PARTNER RAMS PLAYER! (Partner gets pts, player wipes out)
+          triggerTakedown('partner', 'player', false);
         } else {
-          // Gentle lateral bounce off
-          p.lateralOffset += (p.lateralOffset > partnerPhysics.lateralOffset ? 0.15 : -0.15);
-          partnerPhysics.lateralOffset += (partnerPhysics.lateralOffset > p.lateralOffset ? 0.15 : -0.15);
-          bikePhysics.collisionCooldown = 0.5;
+          // Gentle lateral bounce off (side brush) - NO wipeout!
+          var push = 0.15;
+          if (p.lateralOffset < partnerPhysics.lateralOffset) {
+            p.lateralOffset -= push;
+            partnerPhysics.lateralOffset += push;
+          } else {
+            p.lateralOffset += push;
+            partnerPhysics.lateralOffset -= push;
+          }
+          p.lateralOffset = Math.max(-0.85, Math.min(0.85, p.lateralOffset));
+          partnerPhysics.lateralOffset = Math.max(-0.85, Math.min(0.85, partnerPhysics.lateralOffset));
+          bikePhysics.collisionCooldown = 0.8;
         }
       }
     }
@@ -919,6 +953,7 @@
       }
       if (bikePhysics.crashTimer <= 0) {
         bikePhysics.isCrashed = false;
+        bikePhysics.collisionCooldown = 2.5; // Post-respawn immunity
         if (playerBike) playerBike.rotation.z = 0;
       }
     }
@@ -1008,8 +1043,8 @@
     var leadEl = document.getElementById('raceLeadPill');
     if (leadEl) {
       var leadDiff = (raceState.playerLap + bikePhysics.trackProgress) - (raceState.partnerLap + partnerPhysics.trackProgress);
-      var meters = Math.round(leadDiff * trackLength * 0.06);
-      if (Math.abs(meters) < 3) {
+      var meters = Math.round(leadDiff * trackLength);
+      if (Math.abs(meters) < 4) {
         leadEl.textContent = '🔥 Barabar! (Neck-to-Neck)';
         leadEl.style.color = '#FFB000';
       } else if (meters > 0) {
@@ -1027,19 +1062,6 @@
     cleanupRace();
     containerEl = container;
 
-    // Reset Physics
-    bikePhysics.speed = 0;
-    bikePhysics.trackProgress = 0.01;
-    bikePhysics.lastTrackProgress = 0.01;
-    bikePhysics.lateralOffset = -0.25;
-    bikePhysics.tiltAngle = 0;
-    bikePhysics.nitroFuel = 100;
-    bikePhysics.controls.gas = false;
-    bikePhysics.controls.brake = false;
-    bikePhysics.controls.left = false;
-    bikePhysics.controls.right = false;
-    bikePhysics.controls.nitro = false;
-
     // Configure Partner Options
     if (partnerOptions) {
       if (partnerOptions.name) partnerPhysics.name = partnerOptions.name;
@@ -1048,15 +1070,56 @@
       raceState.isSoloAI = partnerOptions.isSoloAI !== undefined ? !!partnerOptions.isSoloAI : true;
     }
 
-    partnerPhysics.trackProgress = 0.018;
-    partnerPhysics.targetProgress = 0.018;
-    partnerPhysics.lastTrackProgress = 0.018;
-    partnerPhysics.lateralOffset = 0.3;
-    partnerPhysics.targetLateralOffset = 0.3;
+    var isHost = (partnerOptions && partnerOptions.isHost !== undefined) ? !!partnerOptions.isHost : true;
+
+    // Reset Physics with Staggered Multi-Lane Grid (Host Left, Guest Right)
+    if (isHost) {
+      // Host takes Pole Position (Left lane, slightly ahead)
+      bikePhysics.trackProgress = 0.012;
+      bikePhysics.lastTrackProgress = 0.012;
+      bikePhysics.lateralOffset = -0.38;
+
+      partnerPhysics.trackProgress = 0.005;
+      partnerPhysics.targetProgress = 0.005;
+      partnerPhysics.lastTrackProgress = 0.005;
+      partnerPhysics.lateralOffset = 0.38;
+      partnerPhysics.targetLateralOffset = 0.38;
+    } else {
+      // Guest takes Grid 2 (Right lane, slightly behind)
+      bikePhysics.trackProgress = 0.005;
+      bikePhysics.lastTrackProgress = 0.005;
+      bikePhysics.lateralOffset = 0.38;
+
+      partnerPhysics.trackProgress = 0.012;
+      partnerPhysics.targetProgress = 0.012;
+      partnerPhysics.lastTrackProgress = 0.012;
+      partnerPhysics.lateralOffset = -0.38;
+      partnerPhysics.targetLateralOffset = -0.38;
+    }
+
+    bikePhysics.speed = 0;
+    bikePhysics.tiltAngle = 0;
+    bikePhysics.nitroFuel = 100;
+    bikePhysics.isCrashed = false;
+    bikePhysics.crashTimer = 0;
+    bikePhysics.collisionCooldown = 4.0; // 4 seconds start-line immunity!
+    bikePhysics.controls.gas = false;
+    bikePhysics.controls.brake = false;
+    bikePhysics.controls.left = false;
+    bikePhysics.controls.right = false;
+    bikePhysics.controls.nitro = false;
+
     partnerPhysics.speed = 0;
+    partnerPhysics.tiltAngle = 0;
+    partnerPhysics.targetTiltAngle = 0;
+    partnerPhysics.isCrashed = false;
+    partnerPhysics.crashTimer = 0;
+    partnerPhysics.isNitro = false;
+
     raceState.playerLap = 1;
     raceState.partnerLap = 1;
     raceState.isFinished = false;
+    raceState.syncTimer = 0;
 
     // Scene
     scene = new THREE.Scene();
@@ -1183,19 +1246,19 @@
   function onPartnerSync(data) {
     if (!data) return;
     raceState.isSoloAI = false;
-    partnerPhysics.targetProgress = data.progress;
-    partnerPhysics.targetLateralOffset = data.lateral;
-    partnerPhysics.speed = data.speed;
-    partnerPhysics.targetTiltAngle = data.tilt;
+    if (typeof data.progress === 'number') partnerPhysics.targetProgress = data.progress;
+    if (typeof data.lateral === 'number') partnerPhysics.targetLateralOffset = data.lateral;
+    if (typeof data.speed === 'number') partnerPhysics.speed = data.speed;
+    if (typeof data.tilt === 'number') partnerPhysics.targetTiltAngle = data.tilt;
     partnerPhysics.isNitro = !!data.nitro;
-    if (data.lap) {
+    if (typeof data.lap === 'number') {
       partnerPhysics.lap = data.lap;
       raceState.partnerLap = data.lap;
     }
   }
 
-  function triggerTakedown(rammer, victim) {
-    bikePhysics.collisionCooldown = 3.2;
+  function triggerTakedown(rammer, victim, isFromNetwork) {
+    bikePhysics.collisionCooldown = 3.5;
     if (window.JodiAudio && typeof window.JodiAudio.playCrash === 'function') {
       window.JodiAudio.playCrash();
     }
@@ -1219,10 +1282,12 @@
       }
       if (window.burstCenter) window.burstCenter(30);
 
-      if (typeof raceState.onTakedownCallback === 'function') {
+      // Only send over network if this event originated locally!
+      if (!isFromNetwork && typeof raceState.onTakedownCallback === 'function') {
         raceState.onTakedownCallback({ rammer: 'player', victim: 'partner', points: 50 });
       }
     } else {
+      // Partner rammed player (local player is victim)
       raceState.partnerScore += 50;
       bikePhysics.isCrashed = true;
       bikePhysics.crashTimer = 2.0;
@@ -1235,7 +1300,8 @@
         setTimeout(function () { banner.className = 'race-takedown-banner'; }, 2200);
       }
 
-      if (typeof raceState.onTakedownCallback === 'function') {
+      // Only send over network if this event originated locally!
+      if (!isFromNetwork && typeof raceState.onTakedownCallback === 'function') {
         raceState.onTakedownCallback({ rammer: 'partner', victim: 'player', points: 50 });
       }
     }
@@ -1243,7 +1309,11 @@
 
   function onExternalTakedown(data) {
     if (!data) return;
-    triggerTakedown(data.rammer === 'player' ? 'partner' : 'player', data.victim === 'player' ? 'partner' : 'player');
+    // Don't re-trigger crash if already in crashed state
+    if (bikePhysics.isCrashed && data.victim === 'player') return;
+    var localRammer = (data.rammer === 'player') ? 'partner' : 'player';
+    var localVictim = (data.victim === 'player') ? 'partner' : 'player';
+    triggerTakedown(localRammer, localVictim, true /* isFromNetwork */);
   }
 
   global.JodiRace = {
