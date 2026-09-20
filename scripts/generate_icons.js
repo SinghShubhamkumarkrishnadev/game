@@ -1,4 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+const { execFileSync } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+
+// 1. Create the master SVG content
+const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <radialGradient id="bgGrad" cx="50%" cy="40%" r="65%">
       <stop offset="0%" stop-color="#E11D74"/>
@@ -72,4 +79,90 @@
           letter-spacing="4"
           opacity="0.9">★ COUPLES GAME ★</text>
   </g>
-</svg>
+</svg>`;
+
+// Write the master SVG to assets/icon.svg
+const svgPath = path.resolve(__dirname, '..', 'assets', 'icon.svg');
+fs.writeFileSync(svgPath, svgContent, 'utf8');
+console.log('Saved assets/icon.svg');
+
+// Create an HTML wrapper that imports Google Fonts and embeds the SVG exactly
+function createHtml(size) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&family=Rozha+One&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: ${size}px;
+      height: ${size}px;
+      overflow: hidden;
+      background: #200B2B;
+    }
+    svg {
+      width: ${size}px;
+      height: ${size}px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  ${svgContent.replace('width="512" height="512"', `width="${size}" height="${size}"`)}
+</body>
+</html>`;
+}
+
+const html512 = path.resolve(__dirname, 'icon_render_512.html');
+const html192 = path.resolve(__dirname, 'icon_render_192.html');
+fs.writeFileSync(html512, createHtml(512), 'utf8');
+fs.writeFileSync(html192, createHtml(192), 'utf8');
+
+const out512 = path.resolve(__dirname, '..', 'assets', 'icon-512.png');
+const out192 = path.resolve(__dirname, '..', 'assets', 'icon-192.png');
+const temp512 = path.resolve(__dirname, 'temp_512.png');
+const temp192 = path.resolve(__dirname, 'temp_192.png');
+const userDataDir = path.resolve(__dirname, 'chrome_tmp_profile');
+
+console.log('Rendering 512x512 icon via Chrome headless...');
+execFileSync(chrome, [
+  '--headless=new',
+  '--disable-gpu',
+  `--user-data-dir=${userDataDir}`,
+  `--screenshot=${temp512}`,
+  '--window-size=512,512',
+  '--virtual-time-budget=4000',
+  '--hide-scrollbars',
+  `file://${html512}`
+]);
+
+console.log('Rendering 192x192 icon via Chrome headless...');
+execFileSync(chrome, [
+  '--headless=new',
+  '--disable-gpu',
+  `--user-data-dir=${userDataDir}`,
+  `--screenshot=${temp192}`,
+  '--window-size=192,192',
+  '--virtual-time-budget=4000',
+  '--hide-scrollbars',
+  `file://${html192}`
+]);
+
+// Copy temp PNGs over to assets
+fs.copyFileSync(temp512, out512);
+fs.copyFileSync(temp192, out192);
+
+// Clean up temporary files
+fs.unlinkSync(html512);
+fs.unlinkSync(html192);
+fs.unlinkSync(temp512);
+fs.unlinkSync(temp192);
+try { fs.rmSync(userDataDir, { recursive: true, force: true }); } catch (_) {}
+
+console.log('Icon generation complete:');
+console.log(' - assets/icon.svg:', fs.statSync(svgPath).size, 'bytes');
+console.log(' - assets/icon-512.png:', fs.statSync(out512).size, 'bytes');
+console.log(' - assets/icon-192.png:', fs.statSync(out192).size, 'bytes');
