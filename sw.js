@@ -1,5 +1,5 @@
 /* Jodi Games Service Worker - Offline, PWA Caching & Instant Auto-Update */
-const CACHE_NAME = 'jodi-v1.4';
+const CACHE_NAME = 'jodi-v1.5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -9,6 +9,9 @@ const ASSETS_TO_CACHE = [
   './js/words.js',
   './js/audio.js',
   './js/network.js',
+  './js/race-audio.js',
+  './js/race-track.js',
+  './js/race-models.js',
   './js/race.js',
   './js/app.js',
   './assets/icon.svg',
