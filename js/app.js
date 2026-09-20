@@ -3,6 +3,7 @@
   'use strict';
 
   var Words = window.JodiWords;
+  var TwoMinds = window.TwoMindsGame;
   var Audio = window.JodiAudio;
   var Net = window.JodiNet;
 
@@ -35,13 +36,13 @@
 
   /* App State */
   var state = {
-    screen: profile.name ? 'lobby' : 'welcome', // 'welcome' | 'lobby' | 'room_ready' | 'game' | 'results' | 'race'
+    screen: profile.name ? 'lobby' : 'welcome', // 'welcome' | 'lobby' | 'room_ready' | 'game' | 'results' | 'race' | 'twominds' | 'twominds_results'
     modal: (function () {
       try { return localStorage.getItem('jodi_guide_seen') ? null : 'guide'; } catch (e) { return null; }
     })(), // Show interactive user guide on first visit!
-    guideTab: 'scribble', // 'scribble' | 'race' | 'install'
+    guideTab: 'twominds', // 'twominds' | 'scribble' | 'race' | 'install'
     joinCodeInput: '',
-    selectedGameMode: 'scribble', // 'scribble' | 'race'
+    selectedGameMode: 'twominds', // 'twominds' | 'scribble' | 'race'
     selectedBikeTheme: 'sport',   // 'sport' | 'bullet' | 'turbo' | 'cafe'
     partnerBikeTheme: 'bullet',
     raceTrackSeed: null,
@@ -55,7 +56,19 @@
     matchSettings: {
       wordCount: 5,   // 5 | 10 | 15
       language: 'mix' // 'hi' | 'en' | 'mix'
-    }
+    },
+    twoMindsSettings: {
+      wordCount: 10,
+      duration: 45, // 60 | 45 | 30
+      mode: 'classic' // 'classic' | 'speed' | 'sync' | 'hard' | 'daily'
+    },
+    twoMinds: null,
+    twoMindsChat: [],
+    partnerBubble: null,
+    bubbleTimer: null,
+    twoMindsTimerInterval: null,
+    twoMindsResults: null,
+    sharePartnerPrompt: false
   };
 
   /* Confetti Engine */
@@ -156,7 +169,15 @@
 
   Net.on('SET_GAME_MODE', function (payload) {
     state.selectedGameMode = payload.mode;
-    toast('Game Mode: ' + (payload.mode === 'race' ? '🏍️ Jodi Race (3D)' : '🎨 Jodi Scribble'));
+    var modeName = payload.mode === 'twominds' ? '🧩 Two Minds, One Word' :
+                   payload.mode === 'race' ? '🏍️ Jodi Race (3D)' : '🎨 Jodi Scribble';
+    toast('Game Mode: ' + modeName);
+    render();
+  });
+
+  Net.on('UPDATE_TWOMINDS_SETTINGS', function (settings) {
+    state.twoMindsSettings = settings;
+    toast('Two Minds settings updated ⚙️');
     render();
   });
 
@@ -299,9 +320,406 @@
 
   Net.on('RETURN_LOBBY', function () {
     state.game = null;
+    if (TwoMinds) TwoMinds.cleanup();
+    state.twoMinds = null;
     state.screen = 'room_ready';
     toast('Room Lobby mein wapas aa gaye 🏠');
     render();
+  });
+
+  /* ==========================================================================
+     TWO MINDS, ONE WORD (DO DIL, EK SHABD) - CONTROLLER & NETWORKING
+     ========================================================================== */
+
+  function stopTwoMindsTimer() {
+    if (state.twoMindsTimerInterval) {
+      clearInterval(state.twoMindsTimerInterval);
+      state.twoMindsTimerInterval = null;
+    }
+  }
+
+  function startTwoMindsTimer() {
+    stopTwoMindsTimer();
+    state.twoMindsTimerInterval = setInterval(function () {
+      if (!state.twoMinds || state.screen !== 'twominds') {
+        stopTwoMindsTimer();
+        return;
+      }
+      var now = Date.now();
+      var leftSec = Math.max(0, Math.ceil((state.twoMinds.roundEndAt - now) / 1000));
+      var timerEl = $('#tmTimerDisplay');
+      if (timerEl) {
+        timerEl.textContent = '⏱️ ' + leftSec + 's';
+        if (leftSec <= 10) {
+          timerEl.classList.add('urgent');
+          if (leftSec > 0) {
+            Audio.playTick(leftSec <= 4);
+          }
+        } else {
+          timerEl.classList.remove('urgent');
+        }
+      }
+
+      // Time expired check
+      if (leftSec <= 0 && !state.twoMinds.isSolved && !state.twoMinds.isTransitioning) {
+        stopTwoMindsTimer();
+        if (Net.isHostUser() || state.twoMinds.isSolo) {
+          handleTwoMindsTimeoutAuthoritative();
+        }
+      }
+    }, 250);
+  }
+
+  function handleTwoMindsTimeoutAuthoritative() {
+    if (!state.twoMinds || state.twoMinds.isTransitioning) return;
+    state.twoMinds.isTransitioning = true;
+    var curPuzzle = state.twoMinds.deck ? state.twoMinds.deck[state.twoMinds.roundIndex] : null;
+    var ans = curPuzzle ? curPuzzle.answer : 'WORD';
+    Audio.playMiss();
+    toast('⌛ Time Up! Sahi shabd tha: ' + ans);
+
+    var timeoutPayload = {
+      word: ans,
+      roundIndex: state.twoMinds.roundIndex
+    };
+    if (Net.getStatus() === 'connected') {
+      Net.send('TM_TIMEOUT', timeoutPayload);
+    }
+
+    setTimeout(function () {
+      advanceTwoMindsRoundAuthoritative();
+    }, 2600);
+  }
+
+  function advanceTwoMindsRoundAuthoritative() {
+    if (!state.twoMinds) return;
+    var nextIdx = state.twoMinds.roundIndex + 1;
+    if (nextIdx < state.twoMinds.totalRounds) {
+      if (TwoMinds) {
+        TwoMinds.initRound(nextIdx);
+      }
+      var nextPuzzle = state.twoMinds.deck[nextIdx];
+      state.twoMinds.roundIndex = nextIdx;
+      state.twoMinds.roundStartTime = Date.now();
+      state.twoMinds.roundEndAt = Date.now() + state.twoMinds.roundDuration * 1000;
+      state.twoMinds.isSolved = false;
+      state.twoMinds.isTransitioning = false;
+      state.twoMinds.roundWinnerBanner = null;
+
+      // Reset slots
+      var cleanLen = nextPuzzle.answer.replace(/\s/g, '').length;
+      var slotsArr = [];
+      for (var s = 0; s < cleanLen; s++) slotsArr.push(null);
+      state.twoMinds.slots = slotsArr;
+
+      // Setup Host rack
+      state.twoMinds.myRack = nextPuzzle.playerA.map(function (ltr, idx) {
+        return { id: 'A_' + idx + '_' + Date.now(), letter: ltr, placed: false };
+      });
+      state.twoMinds.myClue = nextPuzzle.clueA;
+      state.twoMinds.myCategory = nextPuzzle.category;
+      state.twoMinds.wordLength = nextPuzzle.length;
+      state.twoMinds.prompt = nextPuzzle.prompt;
+
+      var roundPayload = {
+        roundIndex: nextIdx,
+        roundDuration: state.twoMinds.roundDuration,
+        roundEndAt: state.twoMinds.roundEndAt,
+        wordLength: nextPuzzle.length,
+        category: nextPuzzle.category,
+        guestLetters: nextPuzzle.playerB,
+        guestClue: nextPuzzle.clueB,
+        prompt: nextPuzzle.prompt,
+        teamScore: state.twoMinds.teamScore,
+        combo: state.twoMinds.comboStreak,
+        wordsSolved: state.twoMinds.wordsSolved
+      };
+
+      if (Net.getStatus() === 'connected') {
+        Net.send('TM_ROUND_ADVANCE', roundPayload);
+      }
+
+      if (state.twoMinds.isSolo && TwoMinds) {
+        TwoMinds.startSoloAILoop(function () {
+          render();
+        });
+      }
+
+      toast('Round ' + (nextIdx + 1) + '/' + state.twoMinds.totalRounds + ' Shuru! 🧩');
+      render();
+    } else {
+      // Match Over!
+      var resultsPayload = {
+        teamScore: state.twoMinds.teamScore,
+        wordsSolved: state.twoMinds.wordsSolved,
+        totalRounds: state.twoMinds.totalRounds,
+        perfectRounds: state.twoMinds.perfectRounds,
+        hintsUsed: state.twoMinds.hintsUsed,
+        maxCombo: state.twoMinds.maxCombo,
+        solveTimes: state.twoMinds.solveTimes
+      };
+      if (Net.getStatus() === 'connected') {
+        Net.send('TM_MATCH_OVER', resultsPayload);
+      }
+      applyTwoMindsGameOver(resultsPayload);
+    }
+  }
+
+  function applyTwoMindsGameOver(res) {
+    stopTwoMindsTimer();
+    if (TwoMinds) TwoMinds.cleanup();
+    state.twoMindsResults = res;
+    state.screen = 'twominds_results';
+    Audio.playUnlock();
+    burstCenter(42);
+    render();
+  }
+
+  function showPartnerSpeechBubble(text, sender) {
+    state.partnerBubble = { text: text, sender: sender || 'Partner' };
+    clearTimeout(state.bubbleTimer);
+    state.bubbleTimer = setTimeout(function () {
+      state.partnerBubble = null;
+      render();
+    }, 3600);
+    render();
+  }
+
+  /* Two Minds Network Event Handlers */
+  Net.on('TM_START_MATCH', function (payload) {
+    state.twoMindsChat = [
+      { text: '🧩 Two Minds Match Shuru! Ek doosre se coordinate karein.', type: 'system' }
+    ];
+    state.partnerBubble = null;
+
+    // Guest Match Setup
+    state.twoMinds = {
+      roundIndex: payload.roundIndex || 0,
+      totalRounds: payload.totalRounds || 10,
+      roundDuration: payload.roundDuration || 45,
+      roundEndAt: payload.roundEndAt || (Date.now() + 45000),
+      teamScore: payload.teamScore || 0,
+      comboStreak: payload.combo || 0,
+      maxCombo: payload.combo || 0,
+      wordsSolved: payload.wordsSolved || 0,
+      hintsUsed: 0,
+      perfectRounds: 0,
+      askTokensRemaining: 3,
+      solveTimes: [],
+      isSolved: false,
+      isTransitioning: false,
+      isSolo: false,
+      wordLength: payload.wordLength,
+      myCategory: payload.category,
+      myClue: payload.guestClue,
+      prompt: payload.prompt,
+      slots: (function () {
+        var arr = [];
+        for (var i = 0; i < payload.wordLength; i++) arr.push(null);
+        return arr;
+      })(),
+      myRack: (payload.guestLetters || []).map(function (ltr, idx) {
+        return { id: 'B_' + idx + '_' + Date.now(), letter: ltr, placed: false };
+      })
+    };
+
+    state.screen = 'twominds';
+    Audio.playTap();
+    toast('🧩 Two Minds Shuru! Dono ke paas alag information hai.');
+    render();
+  });
+
+  Net.on('TM_BOARD_UPDATE', function (payload) {
+    if (!state.twoMinds) return;
+    state.twoMinds.slots = payload.slots || [];
+    var placedIds = {};
+    state.twoMinds.slots.forEach(function (s) {
+      if (s && s.id) placedIds[s.id] = true;
+    });
+    (state.twoMinds.myRack || []).forEach(function (tile) {
+      tile.placed = !!placedIds[tile.id];
+    });
+    Audio.playTap();
+    render();
+  });
+
+  Net.on('TM_QUICK_MSG', function (payload) {
+    if (!state.twoMinds) return;
+    state.twoMindsChat.push({
+      text: payload.text,
+      sender: payload.sender || Net.getPartnerName() || 'Partner',
+      type: 'partner'
+    });
+    showPartnerSpeechBubble(payload.text, payload.sender || Net.getPartnerName() || 'Partner');
+    Audio.playChime();
+    render();
+  });
+
+  Net.on('TM_CHAT_MSG', function (payload) {
+    if (!state.twoMinds) return;
+    state.twoMindsChat.push({
+      text: payload.text,
+      sender: payload.sender || Net.getPartnerName() || 'Partner',
+      type: 'partner'
+    });
+    Audio.playTick(false);
+    render();
+  });
+
+  Net.on('TM_ASK_HELP', function (payload) {
+    state.sharePartnerPrompt = true;
+    Audio.playChime();
+    toast('🤝 ' + (payload.requester || 'Partner') + ' ko letter me madad chahiye! "Share a Letter" dabayein.');
+    render();
+  });
+
+  Net.on('TM_GIVE_HELP', function (payload) {
+    state.twoMindsChat.push({
+      text: '💡 Partner ne reveal kiya: Partner ke paas akshar "' + payload.sharedLetter + '" hai!',
+      type: 'system'
+    });
+    showPartnerSpeechBubble('I have letter: ' + payload.sharedLetter, payload.helper || 'Partner');
+    Audio.playUnlock();
+    toast('💡 Partner ne bataya: Unke paas "' + payload.sharedLetter + '" hai!');
+    render();
+  });
+
+  Net.on('TM_USE_HINT', function (payload) {
+    if (!state.twoMinds) return;
+    state.twoMinds.hintsUsed = (state.twoMinds.hintsUsed || 0) + 1;
+    state.twoMinds.teamScore = Math.max(0, (state.twoMinds.teamScore || 0) - 20);
+
+    if (payload.hintType === 'first_letter' && payload.letter) {
+      state.twoMinds.slots[0] = { letter: payload.letter, owner: 'system', locked: true, id: 'hint_0' };
+    }
+    state.twoMindsChat.push({
+      text: '💡 Hint Use Hua: ' + payload.hintDesc,
+      type: 'system'
+    });
+    Audio.playUnlock();
+    toast('💡 Hint: ' + payload.hintDesc);
+    render();
+  });
+
+  Net.on('TM_SUBMIT_CHECK', function () {
+    if (!Net.isHostUser() || !state.twoMinds) return;
+    if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
+    var checkRes = TwoMinds ? TwoMinds.verifyWord(state.twoMinds.slots) : { isCorrect: false };
+    if (checkRes.isIncomplete) {
+      toast('Pehle saare akshar bharein!');
+      return;
+    }
+    if (checkRes.isCorrect) {
+      state.twoMinds.teamScore = TwoMinds.getMatch().teamScore;
+      state.twoMinds.comboStreak = checkRes.combo;
+      state.twoMinds.wordsSolved = TwoMinds.getMatch().wordsSolved;
+      state.twoMinds.isSolved = true;
+      state.twoMinds.roundWinnerBanner = {
+        word: checkRes.word,
+        scoreAdded: checkRes.scoreAdded,
+        combo: checkRes.combo
+      };
+
+      Audio.playMatch();
+      burstCenter(36);
+
+      Net.send('TM_ROUND_WIN', {
+        word: checkRes.word,
+        scoreAdded: checkRes.scoreAdded,
+        combo: checkRes.combo,
+        teamScore: state.twoMinds.teamScore,
+        wordsSolved: state.twoMinds.wordsSolved
+      });
+      render();
+
+      setTimeout(function () {
+        advanceTwoMindsRoundAuthoritative();
+      }, 2600);
+    } else {
+      Audio.playMiss();
+      toast('Not quite! Keep working together.');
+      var boardEl = document.querySelector('.tm-board-slots');
+      if (boardEl) {
+        boardEl.classList.add('shake');
+        setTimeout(function () { boardEl.classList.remove('shake'); }, 500);
+      }
+      Net.send('TM_ROUND_FAIL', {
+        message: checkRes.message,
+        teamScore: state.twoMinds.teamScore
+      });
+      render();
+    }
+  });
+
+  Net.on('TM_ROUND_WIN', function (payload) {
+    if (!state.twoMinds) return;
+    state.twoMinds.isSolved = true;
+    state.twoMinds.teamScore = payload.teamScore;
+    state.twoMinds.comboStreak = payload.combo;
+    state.twoMinds.wordsSolved = payload.wordsSolved;
+    state.twoMinds.roundWinnerBanner = {
+      word: payload.word,
+      scoreAdded: payload.scoreAdded,
+      combo: payload.combo
+    };
+    Audio.playMatch();
+    burstCenter(36);
+    render();
+  });
+
+  Net.on('TM_ROUND_FAIL', function (payload) {
+    if (!state.twoMinds) return;
+    state.twoMinds.comboStreak = 0;
+    state.twoMinds.teamScore = payload.teamScore;
+    Audio.playMiss();
+    toast('Not quite! Keep working together.');
+    var boardEl = document.querySelector('.tm-board-slots');
+    if (boardEl) {
+      boardEl.classList.add('shake');
+      setTimeout(function () { boardEl.classList.remove('shake'); }, 500);
+    }
+    render();
+  });
+
+  Net.on('TM_ROUND_ADVANCE', function (payload) {
+    if (!state.twoMinds) return;
+    state.twoMinds.roundIndex = payload.roundIndex;
+    state.twoMinds.roundDuration = payload.roundDuration;
+    state.twoMinds.roundEndAt = payload.roundEndAt;
+    state.twoMinds.wordLength = payload.wordLength;
+    state.twoMinds.myCategory = payload.category;
+    state.twoMinds.myClue = payload.guestClue;
+    state.twoMinds.prompt = payload.prompt;
+    state.twoMinds.teamScore = payload.teamScore;
+    state.twoMinds.comboStreak = payload.combo;
+    state.twoMinds.wordsSolved = payload.wordsSolved;
+    state.twoMinds.isSolved = false;
+    state.twoMinds.isTransitioning = false;
+    state.twoMinds.roundWinnerBanner = null;
+
+    var arr = [];
+    for (var i = 0; i < payload.wordLength; i++) arr.push(null);
+    state.twoMinds.slots = arr;
+
+    state.twoMinds.myRack = (payload.guestLetters || []).map(function (ltr, idx) {
+      return { id: 'B_' + idx + '_' + Date.now(), letter: ltr, placed: false };
+    });
+
+    toast('Round ' + (payload.roundIndex + 1) + ' Shuru! 🧩');
+    render();
+  });
+
+  Net.on('TM_TIMEOUT', function (payload) {
+    if (!state.twoMinds) return;
+    state.twoMinds.isSolved = false;
+    state.twoMinds.isTransitioning = true;
+    Audio.playMiss();
+    toast('⌛ Time Up! Sahi shabd tha: ' + payload.word);
+    render();
+  });
+
+  Net.on('TM_MATCH_OVER', function (payload) {
+    applyTwoMindsGameOver(payload);
   });
 
   /* Responsive Canvas Drawing Engine */
@@ -621,8 +1039,7 @@
       '<header class="app-header">' +
       '<div class="brand-title">Jodi Sync <span class="brand-tag">Online</span></div>' +
       '<div class="header-actions">' +
-      '<button class="icon-btn" data-action="openGuide" title="Khelne Ka Tareeka (User Guide)">📖</button>' +
-      '<button class="icon-btn" data-action="openSettings" title="Settings (⚙️)">⚙️</button>' +
+      '<button class="icon-btn header-menu-btn" data-action="openSidebar" aria-label="Menu" title="Menu &amp; Practice">☰</button>' +
       '</div></header>';
   }
 
@@ -636,16 +1053,17 @@
     return '<section class="screen">' +
       renderHeader() +
       '<div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:14px;text-align:center">' +
-      '<div style="font-size:48px">🎨</div>' +
+      '<div style="font-size:48px">💞</div>' +
       '<h1 style="font-family:var(--font-display);font-size:clamp(28px, 7vw, 34px);color:var(--plum)">Aapka Naam Kya Hai?</h1>' +
-      '<p style="color:var(--soft);font-weight:600;font-size:15px">Long distance partner ke saath live draw &amp; guess khelne ke liye apna naam likhein:</p>' +
+      '<p style="color:var(--soft);font-weight:600;font-size:15px">Partner ke saath Two Minds, Scribble aur 3D Bike Race khelne ke liye naam likhein:</p>' +
+      '<form id="welcomeForm" style="margin:0" onsubmit="event.preventDefault();">' +
       '<div class="card elevated">' +
       '<label style="display:block;text-align:left;font-size:12.5px;font-weight:800;color:var(--soft);margin-bottom:6px">AAPKA AVATAR CHUNEIN</label>' +
       '<div class="avatar-row">' + avHtml + '</div>' +
       '<input class="input-field" id="nameInput" placeholder="Aapka pyara naam..." value="' + esc(profile.name) + '" maxlength="14" autocomplete="off">' +
       '<div style="margin-top:14px">' +
-      '<button class="btn primary" data-action="saveName">Aage Badhein →</button>' +
-      '</div></div></div></section>';
+      '<button class="btn primary" type="submit" data-action="saveName">Aage Badhein →</button>' +
+      '</div></div></form></div></section>';
   }
 
   // 2. Room Lobby Screen (Create or Join Room)
@@ -662,18 +1080,22 @@
         '<div style="font-size:12.5px;font-weight:800;color:var(--soft);text-transform:uppercase">Partner ko ye Code Bhejo</div>' +
         '<div class="room-code-val">' + code + '</div>' +
         '<p style="font-size:13.5px;color:var(--soft);margin-bottom:10px">Partner phone par "Room Join Karo" mein ye code daalenge.</p>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' +
         '<div style="display:flex;gap:8px">' +
-        '<button class="btn gold sm" style="flex:1" data-action="copyCode" data-code="' + code + '">📋 Code Copy Karo</button>' +
-        '<button class="btn ghost sm" data-action="cancelRoom">Cancel</button>' +
+        '<button class="btn gold sm" style="flex:1" data-action="copyCode" data-code="' + code + '">📋 Code Copy</button>' +
+        '<button class="btn teal sm" style="flex:1" data-action="shareWhatsApp" data-code="' + code + '">📲 WhatsApp</button>' +
+        '</div>' +
+        '<button class="btn ghost sm" data-action="cancelRoom">Cancel Room</button>' +
         '</div></div>';
     }
 
     return '<section class="screen">' +
       renderHeader() +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">' +
-      '<div style="display:flex;align-items:center;gap:8px">' +
-      '<span style="font-size:24px">' + profile.avatar + '</span>' +
+      '<div class="lobby-profile-pill" data-action="openSidebar" title="Menu &amp; Profile kholein">' +
+      '<span style="font-size:22px">' + profile.avatar + '</span>' +
       '<b>' + esc(profile.name) + '</b>' +
+      '<span style="font-size:12px;color:var(--soft)">⚙️</span>' +
       '</div>' +
       statusBadge +
       '</div>' +
@@ -731,64 +1153,96 @@
       // Game Mode Selection
       '<div class="settings-label" style="margin-top:10px"><span>🎮 Game Mode Chuno</span></div>' +
       '<div class="game-mode-grid">' +
+      '<div class="game-mode-tile ' + (mode === 'twominds' ? 'active' : '') + '" data-action="setMode" data-mode="twominds">' +
+      '<span class="gm-icon">🧩</span>' +
+      '<div class="gm-title">Two Minds</div>' +
+      '<div class="gm-desc">Co-op Puzzle</div>' +
+      '</div>' +
       '<div class="game-mode-tile ' + (mode === 'scribble' ? 'active' : '') + '" data-action="setMode" data-mode="scribble">' +
       '<span class="gm-icon">🎨</span>' +
-      '<div class="gm-title">Jodi Scribble</div>' +
-      '<div class="gm-desc">Draw &amp; Guess Words</div>' +
+      '<div class="gm-title">Scribble</div>' +
+      '<div class="gm-desc">Draw &amp; Guess</div>' +
       '</div>' +
       '<div class="game-mode-tile ' + (mode === 'race' ? 'active' : '') + '" data-action="setMode" data-mode="race">' +
       '<span class="gm-icon">🏍️</span>' +
-      '<div class="gm-title">Jodi Race (3D)</div>' +
-      '<div class="gm-desc">Curvy Track &amp; Nitro</div>' +
+      '<div class="gm-title">3D Race</div>' +
+      '<div class="gm-desc">Curvy Track</div>' +
       '</div>' +
       '</div>' +
 
       // Mode-specific configuration
-      (mode === 'scribble'
+      (mode === 'twominds'
         ? '<div class="settings-section">' +
-          '<div class="settings-label"><span>🎯 Kitne Words Chahiye?</span><small>' + ms.wordCount + ' Words</small></div>' +
+          '<div class="settings-label"><span>🧩 Puzzle Mode</span><small>' + (state.twoMindsSettings.mode || 'classic').toUpperCase() + '</small></div>' +
+          '<div class="segment-group" style="flex-wrap:wrap">' +
+          '<button class="segment-btn ' + (state.twoMindsSettings.mode === 'classic' ? 'active' : '') + '" data-action="setTmMode" data-val="classic">Classic (10 Words)</button>' +
+          '<button class="segment-btn ' + (state.twoMindsSettings.mode === 'speed' ? 'active' : '') + '" data-action="setTmMode" data-val="speed">Speed (30s)</button>' +
+          '<button class="segment-btn ' + (state.twoMindsSettings.mode === 'sync' ? 'active' : '') + '" data-action="setTmMode" data-val="sync">Perfect Sync</button>' +
+          '<button class="segment-btn ' + (state.twoMindsSettings.mode === 'hard' ? 'active' : '') + '" data-action="setTmMode" data-val="hard">Hard (Decoys)</button>' +
+          '<button class="segment-btn ' + (state.twoMindsSettings.mode === 'daily' ? 'active' : '') + '" data-action="setTmMode" data-val="daily">Daily 📅</button>' +
+          '</div>' +
+          '<div class="settings-label"><span>⏱️ Timer Speed</span><small>' + state.twoMindsSettings.duration + 's per word</small></div>' +
           '<div class="segment-group">' +
-          '<button class="segment-btn ' + (ms.wordCount === 5 ? 'active' : '') + '" data-action="setCount" data-val="5">5 Words</button>' +
-          '<button class="segment-btn ' + (ms.wordCount === 10 ? 'active' : '') + '" data-action="setCount" data-val="10">10 Words</button>' +
-          '<button class="segment-btn ' + (ms.wordCount === 15 ? 'active' : '') + '" data-action="setCount" data-val="15">15 Words</button>' +
-          '</div>' +
-          '<div class="settings-label"><span>🌐 Bhasha (Language)</span><small>' + (ms.language === 'hi' ? 'Hindi' : ms.language === 'en' ? 'English' : 'Mix') + '</small></div>' +
-          '<div class="segment-group">' +
-          '<button class="segment-btn teal ' + (ms.language === 'hi' ? 'active' : '') + '" data-action="setLang" data-val="hi">🇮🇳 Desi Hindi</button>' +
-          '<button class="segment-btn teal ' + (ms.language === 'en' ? 'active' : '') + '" data-action="setLang" data-val="en">🇬🇧 English</button>' +
-          '<button class="segment-btn teal ' + (ms.language === 'mix' ? 'active' : '') + '" data-action="setLang" data-val="mix">✨ Mix Dono</button>' +
+          '<button class="segment-btn teal ' + (state.twoMindsSettings.duration === 60 ? 'active' : '') + '" data-action="setTmDuration" data-val="60">60s (Aaram Se)</button>' +
+          '<button class="segment-btn teal ' + (state.twoMindsSettings.duration === 45 ? 'active' : '') + '" data-action="setTmDuration" data-val="45">45s (Normal)</button>' +
+          '<button class="segment-btn teal ' + (state.twoMindsSettings.duration === 30 ? 'active' : '') + '" data-action="setTmDuration" data-val="30">30s (Rapid ⚡)</button>' +
           '</div></div>' +
-          '<button class="btn primary" data-action="startMatch">Khelna Shuru Karein 🎨</button>'
-        : '<div class="settings-section">' +
-          '<div class="settings-label"><span>🏍️ Apni Superbike Chuno</span><small>' + state.selectedBikeTheme.toUpperCase() + '</small></div>' +
-          '<div class="bike-select-grid">' +
-          '<div class="bike-card ' + (state.selectedBikeTheme === 'sport' ? 'active' : '') + '" data-action="pickBike" data-bike="sport">' +
-          '<span class="bike-icon">🏍️</span>' +
-          '<div class="bike-name">Rani Neon Sport</div>' +
-          '<div class="bike-tag">Speed &amp; Agility</div>' +
-          '<div class="bike-color-bar" style="background:linear-gradient(90deg, #D6246E, #FFB000)"></div>' +
-          '</div>' +
-          '<div class="bike-card ' + (state.selectedBikeTheme === 'bullet' ? 'active' : '') + '" data-action="pickBike" data-bike="bullet">' +
-          '<span class="bike-icon">🏍️</span>' +
-          '<div class="bike-name">Royal Bullet 350</div>' +
-          '<div class="bike-tag">Heavy Metal Cruiser</div>' +
-          '<div class="bike-color-bar" style="background:linear-gradient(90deg, #1A1A1A, #E6C280)"></div>' +
-          '</div>' +
-          '<div class="bike-card ' + (state.selectedBikeTheme === 'turbo' ? 'active' : '') + '" data-action="pickBike" data-bike="turbo">' +
-          '<span class="bike-icon">🏍️</span>' +
-          '<div class="bike-name">Mor Teal Turbo</div>' +
-          '<div class="bike-tag">Nitrous Speed Monster</div>' +
-          '<div class="bike-color-bar" style="background:linear-gradient(90deg, #0B7A7C, #38E1E4)"></div>' +
-          '</div>' +
-          '<div class="bike-card ' + (state.selectedBikeTheme === 'cafe' ? 'active' : '') + '" data-action="pickBike" data-bike="cafe">' +
-          '<span class="bike-icon">🏍️</span>' +
-          '<div class="bike-name">Kesar Cafe Racer</div>' +
-          '<div class="bike-tag">Desi Retro Beast</div>' +
-          '<div class="bike-color-bar" style="background:linear-gradient(90deg, #E65100, #FFD54F)"></div>' +
-          '</div></div>' +
-          '<p style="font-size:12px;color:var(--soft);margin-bottom:8px;font-weight:700">3D Real Physics • Procedural Curvy Track • Nitro Booster</p>' +
-          '</div>' +
-          '<button class="btn gold" data-action="startRace">Race Shuru Karein 🏍️💨</button>'
+          (isHost
+            ? '<button class="btn primary" data-action="startTwoMindsMatch">Puzzles Shuru Karein 🧩💞</button>'
+            : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host match shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
+          )
+        : (mode === 'scribble'
+          ? '<div class="settings-section">' +
+            '<div class="settings-label"><span>🎯 Kitne Words Chahiye?</span><small>' + ms.wordCount + ' Words</small></div>' +
+            '<div class="segment-group">' +
+            '<button class="segment-btn ' + (ms.wordCount === 5 ? 'active' : '') + '" data-action="setCount" data-val="5">5 Words</button>' +
+            '<button class="segment-btn ' + (ms.wordCount === 10 ? 'active' : '') + '" data-action="setCount" data-val="10">10 Words</button>' +
+            '<button class="segment-btn ' + (ms.wordCount === 15 ? 'active' : '') + '" data-action="setCount" data-val="15">15 Words</button>' +
+            '</div>' +
+            '<div class="settings-label"><span>🌐 Bhasha (Language)</span><small>' + (ms.language === 'hi' ? 'Hindi' : ms.language === 'en' ? 'English' : 'Mix') + '</small></div>' +
+            '<div class="segment-group">' +
+            '<button class="segment-btn teal ' + (ms.language === 'hi' ? 'active' : '') + '" data-action="setLang" data-val="hi">🇮🇳 Desi Hindi</button>' +
+            '<button class="segment-btn teal ' + (ms.language === 'en' ? 'active' : '') + '" data-action="setLang" data-val="en">🇬🇧 English</button>' +
+            '<button class="segment-btn teal ' + (ms.language === 'mix' ? 'active' : '') + '" data-action="setLang" data-val="mix">✨ Mix Dono</button>' +
+            '</div></div>' +
+            (isHost
+              ? '<button class="btn primary" data-action="startMatch">Khelna Shuru Karein 🎨</button>'
+              : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host match shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
+            )
+          : '<div class="settings-section">' +
+            '<div class="settings-label"><span>🏍️ Apni Superbike Chuno</span><small>' + state.selectedBikeTheme.toUpperCase() + '</small></div>' +
+            '<div class="bike-select-grid">' +
+            '<div class="bike-card ' + (state.selectedBikeTheme === 'sport' ? 'active' : '') + '" data-action="pickBike" data-bike="sport">' +
+            '<span class="bike-icon">🏍️</span>' +
+            '<div class="bike-name">Rani Neon Sport</div>' +
+            '<div class="bike-tag">Speed &amp; Agility</div>' +
+            '<div class="bike-color-bar" style="background:linear-gradient(90deg, #D6246E, #FFB000)"></div>' +
+            '</div>' +
+            '<div class="bike-card ' + (state.selectedBikeTheme === 'bullet' ? 'active' : '') + '" data-action="pickBike" data-bike="bullet">' +
+            '<span class="bike-icon">🏍️</span>' +
+            '<div class="bike-name">Royal Bullet 350</div>' +
+            '<div class="bike-tag">Heavy Metal Cruiser</div>' +
+            '<div class="bike-color-bar" style="background:linear-gradient(90deg, #1A1A1A, #E6C280)"></div>' +
+            '</div>' +
+            '<div class="bike-card ' + (state.selectedBikeTheme === 'turbo' ? 'active' : '') + '" data-action="pickBike" data-bike="turbo">' +
+            '<span class="bike-icon">🏍️</span>' +
+            '<div class="bike-name">Mor Teal Turbo</div>' +
+            '<div class="bike-tag">Nitrous Speed Monster</div>' +
+            '<div class="bike-color-bar" style="background:linear-gradient(90deg, #0B7A7C, #38E1E4)"></div>' +
+            '</div>' +
+            '<div class="bike-card ' + (state.selectedBikeTheme === 'cafe' ? 'active' : '') + '" data-action="pickBike" data-bike="cafe">' +
+            '<span class="bike-icon">🏍️</span>' +
+            '<div class="bike-name">Kesar Cafe Racer</div>' +
+            '<div class="bike-tag">Desi Retro Beast</div>' +
+            '<div class="bike-color-bar" style="background:linear-gradient(90deg, #E65100, #FFD54F)"></div>' +
+            '</div></div>' +
+            '<p style="font-size:12px;color:var(--soft);margin-bottom:8px;font-weight:700">3D Real Physics • Procedural Curvy Track • Nitro Booster</p>' +
+            '</div>' +
+            (isHost
+              ? '<button class="btn gold" data-action="startRace">Race Shuru Karein 🏍️💨</button>'
+              : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host race shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
+            )
+          )
       ) +
       '<div style="margin-top:8px">' +
       '<button class="btn ghost sm" data-action="leaveRoom">Room Se Niklo</button>' +
@@ -1021,6 +1475,274 @@
       '</div></div></section>';
   }
 
+  // 8. Two Minds, One Word Arena
+  function vTwoMinds() {
+    var tm = state.twoMinds;
+    if (!tm) return vRoomReady();
+
+    var isHost = Net.isHostUser();
+    var isSolo = tm.isSolo;
+    var myName = profile.name;
+    var partnerName = isSolo ? 'AI Partner (Solo)' : (Net.getPartnerName() || 'Partner');
+    var myAvatar = profile.avatar;
+    var partnerAvatar = isSolo ? '🤖' : (Net.getPartnerAvatar() || '✨');
+
+    var roundIdx = tm.roundIndex || 0;
+    var totalRounds = tm.totalRounds || 10;
+    var teamScore = tm.teamScore || 0;
+    var combo = tm.comboStreak || 0;
+    var askTokens = tm.askTokensRemaining != null ? tm.askTokensRemaining : 3;
+
+    // Round Win Celebration Overlay Banner
+    var winOverlayHtml = '';
+    if (tm.roundWinnerBanner) {
+      winOverlayHtml = '<div class="card elevated tm-round-win-card" style="background:linear-gradient(135deg, #FFF9FC, #FFF0F6);border-color:var(--rani);margin-bottom:10px">' +
+        '<div style="font-size:32px">🎉</div>' +
+        '<div style="font-size:14px;font-weight:900;color:var(--plum);text-transform:uppercase">WORD COMPLETE!</div>' +
+        '<div class="tm-solved-word">' + esc(tm.roundWinnerBanner.word) + '</div>' +
+        '<div style="font-size:16px;font-weight:800;color:var(--rani)">+' + tm.roundWinnerBanner.scoreAdded + ' pts</div>' +
+        (tm.roundWinnerBanner.combo > 1 ? '<div class="tm-combo-pill" style="margin-top:6px">🔥 ' + tm.roundWinnerBanner.combo + 'X TEAM SYNC</div>' : '') +
+        '<p style="font-size:12px;color:var(--soft);margin-top:6px">Agla word taiyar ho raha hai...</p>' +
+        '<button class="btn gold sm" style="margin-top:8px" data-action="tmAdvanceNow">Agla Word Khelein ➔</button>' +
+        '</div>';
+    }
+
+    // Top Bar
+    var topBarHtml = '<div class="tm-topbar">' +
+      '<div style="display:flex;align-items:center;gap:6px">' +
+      '<button class="tm-exit-pill" data-action="twoMindsLeave" title="Exit Game">✕ Exit</button>' +
+      '<div class="tm-role-badge ' + (isHost ? 'host' : 'guest') + '" style="margin-bottom:0">' +
+      (isHost ? '👑 ' + esc(myName) : '✨ ' + esc(myName)) +
+      '</div></div>' +
+      '<span class="timer-pill" id="tmTimerDisplay">⏱️ 45s</span>' +
+      '<span class="live-pill" style="padding:3px 8px">Word ' + (roundIdx + 1) + '/' + totalRounds + '</span>' +
+      '<div style="font-size:13px;font-weight:900;color:var(--rani)">❤️ ' + teamScore + '</div>' +
+      (combo > 1 ? '<div class="tm-combo-pill">🔥 ' + combo + 'X</div>' : '') +
+      '</div>';
+
+    // Partner Floating Speech Bubble
+    var bubbleHtml = '';
+    if (state.partnerBubble) {
+      bubbleHtml = '<div class="tm-partner-bubble">' +
+        '<span style="font-size:20px">' + partnerAvatar + '</span>' +
+        '<div><b>' + esc(state.partnerBubble.sender) + ':</b> ' + esc(state.partnerBubble.text) + '</div>' +
+        '</div>';
+    }
+
+    // Share Letter Prompt (if partner requested help)
+    var sharePromptHtml = '';
+    if (state.sharePartnerPrompt) {
+      sharePromptHtml = '<div class="card elevated" style="background:#FFF9EB;border-color:var(--genda);padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
+        '<div><b>🤝 Partner needs help!</b><div style="font-size:12px;color:var(--soft)">Apne rack se ek letter share karein</div></div>' +
+        '<button class="btn gold sm" data-action="tmSharePartnerLetter">Share Letter ✨</button>' +
+        '</div>';
+    }
+
+    // Clue Split Information Card
+    var clueCardHtml = '<div class="tm-split-card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center">' +
+      (isHost
+        ? '<span class="live-pill" style="background:#FFF0F6;color:var(--rani);border-color:var(--rani)">🏷️ ' + esc(tm.myCategory || 'Category') + '</span>'
+        : '<span class="live-pill" style="background:#EBFBFA;color:var(--mor);border-color:var(--mor)">📏 ' + (tm.wordLength || 5) + ' Akshar</span>'
+      ) +
+      '<span style="font-size:12px;color:var(--soft);font-weight:700">Aapki Private Information</span>' +
+      '</div>' +
+      '<div class="tm-clue-title" style="margin-top:8px">' + (isHost ? 'Clue A:' : 'Clue B:') + '</div>' +
+      '<div class="tm-clue-body">' + esc(tm.myClue || 'Coordinate with partner') + '</div>' +
+      (tm.prompt ? '<div style="font-size:12px;color:var(--soft);font-style:italic;margin-top:4px">"' + esc(tm.prompt) + '"</div>' : '') +
+      '<div class="tm-partner-sync-hint">' +
+      '<span>💞</span>' +
+      '<span>' + (isHost
+        ? esc(partnerName) + ' ke paas word length aur doosra aadh hint hai!'
+        : esc(partnerName) + ' ke paas category aur doosra aadh hint hai!'
+      ) + '</span>' +
+      '</div>' +
+      '</div>';
+
+    // Shared Word Board Slots
+    var slots = tm.slots || [];
+    var slotsHtml = slots.map(function (s, idx) {
+      if (!s) {
+        return '<div class="tm-slot" data-action="tmSlotTap" data-idx="' + idx + '" title="Slot ' + (idx + 1) + '">' +
+          '<span style="opacity:0.35;font-size:13px">' + (idx + 1) + '</span>' +
+          '</div>';
+      }
+      var ownerClass = s.owner === 'host' ? 'owner-host' : (s.owner === 'guest' ? 'owner-guest' : 'locked-hint');
+      var badge = s.owner === 'host' ? (isHost ? 'Aap' : 'Partner') : (s.owner === 'guest' ? (isHost ? 'Partner' : 'Aap') : 'Hint');
+      return '<div class="tm-slot filled ' + ownerClass + '" data-action="tmSlotTap" data-idx="' + idx + '" title="Tap to return letter">' +
+        '<span>' + esc(s.letter) + '</span>' +
+        '<span class="tm-slot-badge">' + badge + '</span>' +
+        '</div>';
+    }).join('');
+
+    var boardHtml = '<div class="tm-board-wrap">' +
+      '<div class="tm-board-label">' +
+      '<span>🧩 Shared Board</span>' +
+      '<small style="font-size:11px;color:var(--soft);font-weight:600">(Dono ke letters yahan aayenge)</small>' +
+      '</div>' +
+      '<div class="tm-board-slots">' + slotsHtml + '</div>' +
+      '</div>';
+
+    // Private Letters Rack
+    var rack = tm.myRack || [];
+    var rackHtml = '<div class="tm-rack-card">' +
+      '<div class="tm-rack-header">' +
+      '<span class="tm-rack-title">AAPKE AKSHAR (Tap to place)</span>' +
+      '<button class="btn ghost sm" style="padding:2px 8px;font-size:11px" data-action="tmRecall">↩️ Recall</button>' +
+      '</div>' +
+      '<div class="tm-rack-tiles">' +
+      rack.map(function (tile) {
+        return '<button class="tm-tile ' + (isHost ? 'is-host' : 'is-guest') + ' ' + (tile.placed ? 'placed' : '') + '" data-action="tmTileTap" data-id="' + tile.id + '" data-ltr="' + tile.letter + '">' +
+          tile.letter +
+          '</button>';
+      }).join('') +
+      '</div>' +
+      '</div>';
+
+    // Actions Row: Check Word + Ask Partner + Hint
+    var actionsHtml = '<div class="tm-actions-row">' +
+      '<button class="btn primary tm-check-btn" data-action="tmCheckWord">Word Check Karein ✨</button>' +
+      '<button class="btn alt tm-assist-btn" data-action="tmAskHelp" title="Partner se letter maangein">' +
+      '<span class="tm-btn-main">🤝 Ask</span>' +
+      '<span class="tm-btn-sub">' + askTokens + ' Baaki</span>' +
+      '</button>' +
+      '<button class="btn gold tm-assist-btn" data-action="tmUseHint" title="Hint lein (-20 pts)">' +
+      '<span class="tm-btn-main">💡 Hint</span>' +
+      '<span class="tm-btn-sub">-20 pts</span>' +
+      '</button>' +
+      '</div>';
+
+    // 1-Tap Quick Messages Ribbon
+    var quickList = TwoMinds ? TwoMinds.QUICK_MESSAGES : [];
+    var quickHtml = '<div class="tm-quick-ribbon">' +
+      quickList.map(function (qm) {
+        return '<button class="tm-quick-chip" data-action="tmQuickChip" data-text="' + esc(qm.text) + '">' + esc(qm.text) + '</button>';
+      }).join('') +
+      '</div>';
+
+    // In-game Activity & Chat Feed
+    var chatHtml = '<div class="tm-activity-feed" id="tmChatFeed">' +
+      (state.twoMindsChat || []).slice(-6).map(function (msg) {
+        return '<div class="tm-chat-item ' + (msg.type || 'system') + '">' +
+          (msg.sender ? '<b>' + esc(msg.sender) + ': </b>' : '') +
+          esc(msg.text) +
+          '</div>';
+      }).join('') +
+      '</div>' +
+      '<form class="guess-box" id="tmChatForm" style="margin-top:4px">' +
+      '<input id="tmChatInput" placeholder="Partner ko message likhein..." autocomplete="off">' +
+      '<button class="btn alt sm" type="submit">Bhejo 💬</button>' +
+      '</form>';
+
+    return '<section class="screen tm-arena">' +
+      winOverlayHtml +
+      topBarHtml +
+      bubbleHtml +
+      sharePromptHtml +
+      clueCardHtml +
+      boardHtml +
+      rackHtml +
+      actionsHtml +
+      quickHtml +
+      chatHtml +
+      '</section>';
+  }
+
+  // 9. Two Minds Match Results Screen
+  function vTwoMindsResults() {
+    var res = state.twoMindsResults || {
+      teamScore: 1280,
+      wordsSolved: 9,
+      totalRounds: 10,
+      perfectRounds: 6,
+      hintsUsed: 2,
+      maxCombo: 4,
+      solveTimes: [15, 18, 22]
+    };
+
+    var score = res.teamScore || 0;
+    var verdict = score >= 1200
+      ? ['Soulmate Sync ❤️', 'Aap dono ka telepathic bond kamaal ka hai! Perfect cooperation!']
+      : score >= 800
+        ? ['Two Minds, One Heart ✨', 'Superb teamwork! Ek doosre ko behtareen tareeqe se samjha.']
+        : ['Partners in Crime 🎯', 'Pehle match ke hisaab se shandar koshish! Ek round aur banta hai.'];
+
+    var avgTime = 0;
+    if (res.solveTimes && res.solveTimes.length) {
+      var sum = res.solveTimes.reduce(function (a, b) { return a + b; }, 0);
+      avgTime = Math.round(sum / res.solveTimes.length);
+    } else {
+      avgTime = 20;
+    }
+
+    return '<section class="screen">' +
+      renderHeader() +
+      '<div style="text-align:center;padding:10px 0">' +
+      '<div style="font-size:50px;margin-bottom:2px">💞</div>' +
+      '<h1 style="font-family:var(--font-display);font-size:clamp(26px, 7vw, 32px);color:var(--plum)">' + verdict[0] + '</h1>' +
+      '<p style="color:var(--soft);font-size:14px;max-width:320px;margin:0 auto 12px">' + verdict[1] + '</p>' +
+      '<div class="card elevated" style="margin-bottom:14px">' +
+      '<div style="font-size:12px;font-weight:800;color:var(--soft);text-transform:uppercase">Combined Team Score</div>' +
+      '<div style="font-family:var(--font-display);font-size:44px;color:var(--rani);line-height:1.1">' + score + ' <span style="font-size:18px">pts</span></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;text-align:left">' +
+      '<div class="card" style="padding:8px 10px;border-width:1.5px">' +
+      '<div style="font-size:11px;color:var(--soft);font-weight:700">Words Solved</div>' +
+      '<div style="font-size:18px;font-weight:900;color:var(--plum)">' + (res.wordsSolved || 0) + '/' + (res.totalRounds || 10) + '</div>' +
+      '</div>' +
+      '<div class="card" style="padding:8px 10px;border-width:1.5px">' +
+      '<div style="font-size:11px;color:var(--soft);font-weight:700">Longest Streak</div>' +
+      '<div style="font-size:18px;font-weight:900;color:var(--kesar)">🔥 ' + (res.maxCombo || 1) + 'X</div>' +
+      '</div>' +
+      '<div class="card" style="padding:8px 10px;border-width:1.5px">' +
+      '<div style="font-size:11px;color:var(--soft);font-weight:700">Perfect Rounds</div>' +
+      '<div style="font-size:18px;font-weight:900;color:var(--mor)">' + (res.perfectRounds || 0) + '</div>' +
+      '</div>' +
+      '<div class="card" style="padding:8px 10px;border-width:1.5px">' +
+      '<div style="font-size:11px;color:var(--soft);font-weight:700">Avg Solve Time</div>' +
+      '<div style="font-size:18px;font-weight:900;color:var(--plum)">' + avgTime + 's</div>' +
+      '</div>' +
+      '</div></div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px">' +
+      '<button class="btn primary" data-action="twoMindsPlayAgain">Dobara Khelo 🔁</button>' +
+      '<button class="btn alt" data-action="twoMindsLeave">Room Lobby Mein Jao 🏠</button>' +
+      '<button class="btn ghost sm" data-action="leaveRoom">Room Se Niklo</button>' +
+      '</div></div></section>';
+  }
+
+  function bindTwoMindsChatForm() {
+    var form = $('#tmChatForm');
+    if (!form) return;
+    form.onsubmit = function (e) {
+      e.preventDefault();
+      var inp = $('#tmChatInput');
+      if (!inp) return;
+      var text = inp.value.trim();
+      if (!text) return;
+      inp.value = '';
+      state.twoMindsChat.push({
+        text: text,
+        sender: profile.name,
+        type: 'me'
+      });
+      if (Net.getStatus() === 'connected') {
+        Net.send('TM_CHAT_MSG', { text: text, sender: profile.name });
+      } else if (state.twoMinds && state.twoMinds.isSolo) {
+        setTimeout(function () {
+          var aiReplies = ['Haan suno ji! 💖', 'Sahi lag raha hai! ✨', 'Yeh wala letter try karein? 💡', 'Aage badhein! 🚀'];
+          var rep = aiReplies[Math.floor(Math.random() * aiReplies.length)];
+          if (state.twoMinds) {
+            state.twoMindsChat.push({ text: rep, sender: 'AI Partner', type: 'partner' });
+            showPartnerSpeechBubble(rep, 'AI Partner');
+            render();
+          }
+        }, 1000);
+      }
+      render();
+      var feed = $('#tmChatFeed');
+      if (feed) feed.scrollTop = feed.scrollHeight;
+    };
+  }
+
   // Bottom Sheet Modal for Join Code & User Manual Guide
   function renderModal() {
     var m = $('#modal');
@@ -1036,9 +1758,35 @@
         '</div></div>';
       m.classList.add('on');
     } else if (state.modal === 'guide') {
-      var tab = state.guideTab || 'scribble';
+      var tab = state.guideTab || 'twominds';
       var contentHtml = '';
-      if (tab === 'scribble') {
+      if (tab === 'twominds') {
+        contentHtml = '<div class="guide-step-card">' +
+          '<span class="guide-num">1</span>' +
+          '<div><div class="guide-step-title">Do Dil, Alag Jankari (USP)</div>' +
+          '<div class="guide-step-desc">Player A ko category aur pehli aadhi clues milti hain. Player B ko word length aur doosri aadhi clues milti hain! Akele koi solve nahi kar sakta.</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">2</span>' +
+          '<div><div class="guide-step-title">Chat &amp; 1-Tap Quick Messages</div>' +
+          '<div class="guide-step-desc">"I have this letter", "Try my letter", ya in-game chat se apne clues ek doosre ko batayein aur word milkar guess karein.</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">3</span>' +
+          '<div><div class="guide-step-title">Shared Board Par Letters Rakhein</div>' +
+          '<div class="guide-step-desc">Apne rack ke letters par tap karke shared slots me rakhein. Player A ke letters pink aur Player B ke teal me aate hain!</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">4</span>' +
+          '<div><div class="guide-step-title">Ask Partner &amp; Hints</div>' +
+          '<div class="guide-step-desc">Agar phans jao to 3 <b>"Ask Partner"</b> tokens se partner se letter maangein ya <b>"Hint"</b> se pehla akshar unlock karein.</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card" style="border-color:var(--genda);background:#FFF9EB">' +
+          '<span class="guide-num" style="background:var(--genda);color:#000">🔥</span>' +
+          '<div><div class="guide-step-title" style="color:#000">Team Score &amp; SYNC Combos</div>' +
+          '<div class="guide-step-desc" style="color:#2A1240">Lagaatar sahi solve karne par <b class="guide-highlight">🔥 2X, 3X TEAM SYNC</b> multiplier milta hai! Koi single winner nahi — Jodi hi ek team hai!</div></div>' +
+          '</div>';
+      } else if (tab === 'scribble') {
         contentHtml = '<div class="guide-step-card">' +
           '<span class="guide-num">1</span>' +
           '<div><div class="guide-step-title">Room Banao ya Join Karo</div>' +
@@ -1105,9 +1853,10 @@
         '<button class="pwa-dismiss-btn" data-action="closeGuide" style="color:var(--plum);font-size:20px">✕</button>' +
         '</div>' +
         '<div class="guide-tabs">' +
+        '<button class="guide-tab-btn ' + (tab === 'twominds' ? 'active' : '') + '" data-action="setGuideTab" data-tab="twominds">🧩 Two Minds</button>' +
         '<button class="guide-tab-btn ' + (tab === 'scribble' ? 'active' : '') + '" data-action="setGuideTab" data-tab="scribble">🎨 Scribble</button>' +
         '<button class="guide-tab-btn ' + (tab === 'race' ? 'active' : '') + '" data-action="setGuideTab" data-tab="race">🏍️ 3D Race</button>' +
-        '<button class="guide-tab-btn ' + (tab === 'install' ? 'active' : '') + '" data-action="setGuideTab" data-tab="install">📲 Install Info</button>' +
+        '<button class="guide-tab-btn ' + (tab === 'install' ? 'active' : '') + '" data-action="setGuideTab" data-tab="install">📲 Install</button>' +
         '</div>' +
         '<div class="guide-content-scroll">' + contentHtml + '</div>' +
         '<div style="margin-top:14px">' +
@@ -1149,7 +1898,7 @@
         '<button class="btn ghost" style="flex:1" data-action="closeModal">Theek Hai 👍</button>' +
         '</div></div></div>';
       m.className = 'on';
-    } else if (state.modal === 'settings') {
+    } else if (state.modal === 'settings' || state.modal === 'sidebar') {
       var isMuted = Audio.isMuted();
       var avs = ['💖', '🪔', '🦁', '👑', '🌸', '⚡', '🏍️', '🦋', '🌹', '🐯', '🍫', '🧸'];
       var avHtml = '';
@@ -1175,17 +1924,67 @@
           '</div>';
       }
 
-      m.innerHTML = '<aside class="settings-drawer" role="dialog" aria-label="Game Settings">' +
+      m.innerHTML = '<aside class="settings-drawer" role="dialog" aria-label="Jodi Menu and Practice">' +
         // Drawer Header
         '<div class="settings-drawer-header">' +
-        '<div class="settings-drawer-title"><span>⚙️</span> Settings</div>' +
-        '<button class="drawer-close-btn" data-action="closeModal" aria-label="Close Settings">✕</button>' +
+        '<div class="settings-drawer-title"><span>☰</span> Jodi Menu</div>' +
+        '<button class="drawer-close-btn" data-action="closeModal" aria-label="Close Menu">✕</button>' +
         '</div>' +
 
         // Drawer Content Scroll
         '<div class="settings-drawer-scroll">' +
 
-        // Section 1: Profile & Name Change
+        // Section 1: Solo Practice & Demos (Moved from home page to sidebar)
+        '<div class="settings-card" style="background:linear-gradient(135deg, #FFF9FC, #FFFDF9);border-color:var(--rani)">' +
+        '<div class="settings-card-header" style="margin-bottom:8px">' +
+        '<span class="sch-icon">🎮</span>' +
+        '<div><div class="sch-title" style="color:var(--plum)">Solo Practice &amp; Demos</div><div class="sch-desc">Akele test ya practice karein</div></div>' +
+        '</div>' +
+
+        // Demo 1: Two Minds
+        '<div class="sidebar-demo-card" style="background:#FFF0F6;border-color:var(--rani)">' +
+        '<div class="sidebar-demo-info">' +
+        '<span style="font-size:26px">🧩</span>' +
+        '<div>' +
+        '<div class="sidebar-demo-title">Two Minds, One Word</div>' +
+        '<div class="sidebar-demo-sub">AI Partner ke saath word puzzle</div>' +
+        '</div></div>' +
+        '<button class="btn primary sm" style="width:auto;padding:6px 14px" data-action="soloPracticeTwoMinds">Practice 🚀</button>' +
+        '</div>' +
+
+        // Demo 2: Scribble
+        '<div class="sidebar-demo-card" style="background:#EBFBFA;border-color:var(--mor)">' +
+        '<div class="sidebar-demo-info">' +
+        '<span style="font-size:26px">🎨</span>' +
+        '<div>' +
+        '<div class="sidebar-demo-title">Scribble Draw &amp; Guess</div>' +
+        '<div class="sidebar-demo-sub">Free canvas drawing test</div>' +
+        '</div></div>' +
+        '<button class="btn teal sm" style="width:auto;padding:6px 14px" data-action="soloPracticeScribble">Draw 🎨</button>' +
+        '</div>' +
+
+        // Demo 3: 3D Bike Race
+        '<div class="sidebar-demo-card" style="background:#FFF9EB;border-color:var(--genda)">' +
+        '<div class="sidebar-demo-info">' +
+        '<span style="font-size:26px">🏍️</span>' +
+        '<div>' +
+        '<div class="sidebar-demo-title">3D Superbike Race</div>' +
+        '<div class="sidebar-demo-sub">Solo physics track test drive</div>' +
+        '</div></div>' +
+        '<button class="btn gold sm" style="width:auto;padding:6px 14px" data-action="settingsSoloPractice">Drive 🚀</button>' +
+        '</div>' +
+        '</div>' +
+
+        // Section 2: User Guide
+        '<div class="settings-card">' +
+        '<div class="settings-card-header">' +
+        '<span class="sch-icon">📖</span>' +
+        '<div><div class="sch-title">Khelne Ka Tareeka</div><div class="sch-desc">Rules &amp; tips sabhi 3 games ke liye</div></div>' +
+        '</div>' +
+        '<button class="btn alt sm" style="width:100%" data-action="openGuideFromSettings">📖 User Guide Kholein</button>' +
+        '</div>' +
+
+        // Section 3: Profile & Name Change
         '<div class="settings-card">' +
         '<div class="settings-card-header">' +
         '<span class="sch-icon">👤</span>' +
@@ -1199,7 +1998,7 @@
         '<button class="btn primary sm" style="width:100%;margin-top:10px" data-action="saveSettingsProfile">💾 Naam Save Karein</button>' +
         '</div>' +
 
-        // Section 2: Sound & Audio Toggle
+        // Section 4: Sound & Audio Toggle
         '<div class="settings-card">' +
         '<div class="settings-card-header">' +
         '<span class="sch-icon">' + (isMuted ? '🔇' : '🔊') + '</span>' +
@@ -1213,7 +2012,7 @@
         '</div>' +
         '</div>' +
 
-        // Section 3: 3D Superbike Model
+        // Section 5: 3D Superbike Model
         '<div class="settings-card">' +
         '<div class="settings-card-header">' +
         '<span class="sch-icon">🏍️</span>' +
@@ -1222,22 +2021,16 @@
         '<div class="settings-bike-list">' + bikeHtml + '</div>' +
         '</div>' +
 
-        // Section 4: Solo Practice Shortcut
-        '<div class="settings-card" style="background:linear-gradient(135deg, #FFF9EB, #FFF3D6);border-color:var(--genda)">' +
+        // Section 6: App Install (PWA)
+        '<div class="settings-card" style="background:#FFF9FC;border-color:var(--rani)">' +
         '<div class="settings-card-header">' +
-        '<span class="sch-icon">🏁</span>' +
-        '<div><div class="sch-title" style="color:var(--plum)">Solo Practice Race</div><div class="sch-desc">Akele 3D track par bike chalao</div></div>' +
+        '<span class="sch-icon">📲</span>' +
+        '<div><div class="sch-title">Direct App Install</div><div class="sch-desc">Bina App Store phone par icon banayein</div></div>' +
         '</div>' +
-        '<button class="btn gold sm" style="width:100%;margin-top:6px" data-action="settingsSoloPractice">3D Bike Test Drive 🚀</button>' +
-        '</div>' +
-
-        // Section 5: Guide & Install Links
-        '<div style="display:flex;flex-direction:column;gap:8px;padding-top:4px">' +
-        '<button class="btn ghost sm" data-action="openGuideFromSettings">📖 Khelne Ka Tareeka (User Guide)</button>' +
-        '<button class="btn ghost sm" data-action="installPwa">📲 Jodi Sync Install Karein</button>' +
+        '<button class="btn gold sm" style="width:100%" data-action="installPwa">📲 Jodi Sync Install Karein</button>' +
         '</div>' +
 
-        '<div class="settings-version-tag">Jodi Sync v2.4 • Handcrafted with ❤️ for Couples</div>' +
+        '<div class="settings-version-tag">Jodi Sync v2.5 • Handcrafted with ❤️ for Couples</div>' +
         '</div>' +
         '</aside>';
 
@@ -1261,6 +2054,8 @@
     else if (state.screen === 'results') html = vResults();
     else if (state.screen === 'race') html = vRace();
     else if (state.screen === 'race_results') html = vRaceResults();
+    else if (state.screen === 'twominds') html = vTwoMinds();
+    else if (state.screen === 'twominds_results') html = vTwoMindsResults();
 
     view.innerHTML = html;
     renderModal();
@@ -1270,6 +2065,9 @@
       bindCanvasEvents();
       startMatchTimer();
       bindGuessForm();
+    } else if (state.screen === 'twominds') {
+      startTwoMindsTimer();
+      bindTwoMindsChatForm();
     } else if (state.screen === 'race') {
       var mount = $('#raceCanvasMount');
       if (mount && window.JodiRace) {
@@ -1689,6 +2487,435 @@
       } else {
         toast('Chrome ke upar 3 dots (⋮) dabakar "Install app" chunein! 📲');
       }
+    } else if (action === 'setTmMode') {
+      Audio.playTap();
+      state.twoMindsSettings.mode = target.dataset.val;
+      if (Net.getStatus() === 'connected') {
+        Net.send('UPDATE_TWOMINDS_SETTINGS', state.twoMindsSettings);
+      }
+      render();
+    } else if (action === 'setTmDuration') {
+      Audio.playTap();
+      state.twoMindsSettings.duration = +target.dataset.val;
+      if (Net.getStatus() === 'connected') {
+        Net.send('UPDATE_TWOMINDS_SETTINGS', state.twoMindsSettings);
+      }
+      render();
+    } else if (action === 'startTwoMindsMatch') {
+      Audio.playTap();
+      var tms = state.twoMindsSettings;
+      var deck = TwoMinds.getDeck(tms.wordCount, tms.mode);
+      var match = TwoMinds.createMatch(deck, { duration: tms.duration, mode: tms.mode, isSolo: false });
+
+      var cleanLen = deck[0].answer.replace(/\s/g, '').length;
+      var initialSlots = [];
+      for (var sIdx = 0; sIdx < cleanLen; sIdx++) initialSlots.push(null);
+
+      state.twoMinds = {
+        roundIndex: 0,
+        totalRounds: deck.length,
+        roundDuration: tms.duration,
+        roundEndAt: match.roundEndAt,
+        teamScore: 0,
+        comboStreak: 0,
+        maxCombo: 0,
+        wordsSolved: 0,
+        hintsUsed: 0,
+        perfectRounds: 0,
+        askTokensRemaining: 3,
+        solveTimes: [],
+        isSolved: false,
+        isTransitioning: false,
+        isSolo: false,
+        wordLength: deck[0].length,
+        myCategory: deck[0].category,
+        myClue: deck[0].clueA,
+        prompt: deck[0].prompt,
+        slots: initialSlots,
+        myRack: deck[0].playerA.map(function (ltr, idx) {
+          return { id: 'A_' + idx + '_' + Date.now(), letter: ltr, placed: false };
+        }),
+        deck: deck
+      };
+
+      state.twoMindsChat = [
+        { text: '🧩 Two Minds Match Shuru! Dono ek doosre se coordinate karein.', type: 'system' }
+      ];
+      state.partnerBubble = null;
+      state.screen = 'twominds';
+
+      Net.send('TM_START_MATCH', {
+        roundIndex: 0,
+        totalRounds: deck.length,
+        roundDuration: tms.duration,
+        roundEndAt: match.roundEndAt,
+        wordLength: deck[0].length,
+        category: deck[0].category,
+        guestLetters: deck[0].playerB,
+        guestClue: deck[0].clueB,
+        prompt: deck[0].prompt,
+        mode: tms.mode
+      });
+      render();
+  function launchTwoMindsSolo() {
+    Audio.playTap();
+    state.modal = null;
+    renderModal();
+    var sDeck = TwoMinds.getDeck(5, 'classic');
+    var sMatch = TwoMinds.createMatch(sDeck, { duration: 45, mode: 'classic', isSolo: true });
+
+    var sCleanLen = sDeck[0].answer.replace(/\s/g, '').length;
+    var sInitialSlots = [];
+    for (var ssIdx = 0; ssIdx < sCleanLen; ssIdx++) sInitialSlots.push(null);
+
+    state.twoMinds = {
+      roundIndex: 0,
+      totalRounds: sDeck.length,
+      roundDuration: 45,
+      roundEndAt: sMatch.roundEndAt,
+      teamScore: 0,
+      comboStreak: 0,
+      maxCombo: 0,
+      wordsSolved: 0,
+      hintsUsed: 0,
+      perfectRounds: 0,
+      askTokensRemaining: 3,
+      solveTimes: [],
+      isSolved: false,
+      isTransitioning: false,
+      isSolo: true,
+      wordLength: sDeck[0].length,
+      myCategory: sDeck[0].category,
+      myClue: sDeck[0].clueA,
+      prompt: sDeck[0].prompt,
+      slots: sInitialSlots,
+      myRack: sDeck[0].playerA.map(function (ltr, idx) {
+        return { id: 'A_' + idx + '_' + Date.now(), letter: ltr, placed: false };
+      }),
+      deck: sDeck
+    };
+
+    if (TwoMinds) TwoMinds.setSlots(sInitialSlots);
+
+    state.twoMindsChat = [
+      { text: '🤖 Solo Practice Mode: AI Partner ke saath khele!', type: 'system' }
+    ];
+    state.partnerBubble = null;
+    state.screen = 'twominds';
+
+    TwoMinds.startSoloAILoop(function (aiEvt) {
+      if (aiEvt && aiEvt.type === 'ai_letter_placed' && state.twoMinds) {
+        state.twoMinds.slots = aiEvt.slots;
+        Audio.playTap();
+        state.twoMindsChat.push({
+          text: '🤖 AI Partner ne akshar "' + aiEvt.letter + '" slot me rakha! ✨',
+          type: 'partner'
+        });
+        showPartnerSpeechBubble('Maine "' + aiEvt.letter + '" rakh diya! 💖', 'AI Partner');
+        render();
+      }
+    });
+    render();
+  }
+
+  function launchScribbleSolo() {
+    Audio.playTap();
+    state.modal = null;
+    renderModal();
+    var sDeck = Words.getDeck(5, 'hi');
+    var endAt = Date.now() + 60000;
+    state.game = {
+      deck: sDeck,
+      turnIndex: 0,
+      totalTurns: sDeck.length,
+      dur: 60,
+      endAt: endAt,
+      scores: [0, 0],
+      chat: [{ text: '🎨 Solo Drawing Canvas: Yahan aap free drawing test kar sakte hain!', type: 'system' }],
+      solved: false,
+      isSolo: true
+    };
+    state.strokes = [];
+    state.screen = 'game';
+    toast('Solo Drawing Canvas Shuru! 🎨');
+    render();
+  }
+
+    } else if (action === 'openSidebar') {
+      Audio.playTap();
+      state.modal = 'sidebar';
+      renderModal();
+    } else if (action === 'shareWhatsApp') {
+      Audio.playTap();
+      var wCode = target.dataset.code || Net.getRoomCode();
+      var msg = 'Aao Jodi Sync khele! Mere room ka code hai: ' + wCode + ' 💖 Khelte hain: ' + window.location.href;
+      window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(msg), '_blank');
+    } else if (action === 'soloPracticeTwoMinds') {
+      launchTwoMindsSolo();
+    } else if (action === 'soloPracticeScribble') {
+      launchScribbleSolo();
+    } else if (action === 'tmAdvanceNow') {
+      Audio.playTap();
+      advanceTwoMindsRoundAuthoritative();
+    } else if (action === 'tmTileTap') {
+      var tileId = target.dataset.id;
+      var tileLtr = target.dataset.ltr;
+      if (!state.twoMinds || state.twoMinds.isSolved || state.twoMinds.isTransitioning) return;
+      var rackTile = state.twoMinds.myRack.find(function (t) { return t.id === tileId; });
+      if (!rackTile || rackTile.placed) return;
+
+      var emptyIdx = state.twoMinds.slots.indexOf(null);
+      if (emptyIdx === -1) {
+        toast('Saare slots bhare hain! Letter hatane ke liye slot par tap karein.');
+        return;
+      }
+
+      var isHost = Net.isHostUser();
+      state.twoMinds.slots[emptyIdx] = {
+        letter: tileLtr,
+        owner: isHost ? 'host' : 'guest',
+        id: tileId
+      };
+      rackTile.placed = true;
+      if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
+      Audio.playTap();
+
+      if (Net.getStatus() === 'connected') {
+        Net.send('TM_BOARD_UPDATE', { slots: state.twoMinds.slots });
+      }
+      render();
+    } else if (action === 'tmSlotTap') {
+      var sIdx = +target.dataset.idx;
+      if (!state.twoMinds || state.twoMinds.isSolved || state.twoMinds.isTransitioning) return;
+      var currentSlot = state.twoMinds.slots[sIdx];
+      if (!currentSlot) return;
+
+      var isHost = Net.isHostUser();
+      var isMyLetter = (currentSlot.owner === 'host' && isHost) ||
+                       (currentSlot.owner === 'guest' && !isHost) ||
+                       state.twoMinds.isSolo;
+
+      if (currentSlot.locked) {
+        toast('Ye hint se unlock hua letter hai!');
+        return;
+      }
+
+      if (!isMyLetter) {
+        toast('Ye letter partner ne rakha hai!');
+        return;
+      }
+
+      state.twoMinds.slots[sIdx] = null;
+      var myRackTile = state.twoMinds.myRack.find(function (t) { return t.id === currentSlot.id; });
+      if (myRackTile) myRackTile.placed = false;
+
+      if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
+      Audio.playTap();
+      if (Net.getStatus() === 'connected') {
+        Net.send('TM_BOARD_UPDATE', { slots: state.twoMinds.slots });
+      }
+      render();
+    } else if (action === 'tmRecall') {
+      Audio.playTap();
+      if (!state.twoMinds) return;
+      var isHost = Net.isHostUser();
+      var myOwner = isHost ? 'host' : 'guest';
+      state.twoMinds.slots = state.twoMinds.slots.map(function (s) {
+        if (s && (s.owner === myOwner || state.twoMinds.isSolo) && !s.locked) {
+          return null;
+        }
+        return s;
+      });
+      state.twoMinds.myRack.forEach(function (t) { t.placed = false; });
+      if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
+      if (Net.getStatus() === 'connected') {
+        Net.send('TM_BOARD_UPDATE', { slots: state.twoMinds.slots });
+      }
+      render();
+    } else if (action === 'tmCheckWord') {
+      Audio.playTap();
+      if (!state.twoMinds || state.twoMinds.isSolved || state.twoMinds.isTransitioning) return;
+
+      if (!Net.isHostUser() && !state.twoMinds.isSolo) {
+        Net.send('TM_SUBMIT_CHECK', {});
+        toast('Word check ho raha hai...');
+        return;
+      }
+
+      if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
+      var res = TwoMinds ? TwoMinds.verifyWord(state.twoMinds.slots) : { isCorrect: false };
+      if (res.isIncomplete) {
+        toast('Pehle saare akshar bharein!');
+        return;
+      }
+
+      if (res.isCorrect) {
+        state.twoMinds.teamScore = TwoMinds.getMatch().teamScore;
+        state.twoMinds.comboStreak = res.combo;
+        state.twoMinds.wordsSolved = TwoMinds.getMatch().wordsSolved;
+        state.twoMinds.isSolved = true;
+        state.twoMinds.roundWinnerBanner = {
+          word: res.word,
+          scoreAdded: res.scoreAdded,
+          combo: res.combo
+        };
+
+        Audio.playMatch();
+        burstCenter(36);
+
+        if (Net.getStatus() === 'connected') {
+          Net.send('TM_ROUND_WIN', {
+            word: res.word,
+            scoreAdded: res.scoreAdded,
+            combo: res.combo,
+            teamScore: state.twoMinds.teamScore,
+            wordsSolved: state.twoMinds.wordsSolved
+          });
+        }
+        render();
+
+        setTimeout(function () {
+          advanceTwoMindsRoundAuthoritative();
+        }, 2600);
+      } else {
+        Audio.playMiss();
+        toast('Not quite! Keep working together.');
+        var boardEl = document.querySelector('.tm-board-slots');
+        if (boardEl) {
+          boardEl.classList.add('shake');
+          setTimeout(function () { boardEl.classList.remove('shake'); }, 500);
+        }
+        if (Net.getStatus() === 'connected') {
+          Net.send('TM_ROUND_FAIL', {
+            message: res.message,
+            teamScore: state.twoMinds.teamScore
+          });
+        }
+        render();
+      }
+    } else if (action === 'tmAskHelp') {
+      Audio.playTap();
+      if (!state.twoMinds) return;
+      if (state.twoMinds.askTokensRemaining <= 0) {
+        toast('Saare Ask Partner tokens use ho chuke hain!');
+        return;
+      }
+      state.twoMinds.askTokensRemaining--;
+      if (state.twoMinds.isSolo) {
+        var curPuzzle = state.twoMinds.deck[state.twoMinds.roundIndex];
+        var guestLtrs = curPuzzle.playerB || [];
+        var cleanAns = curPuzzle.answer.replace(/\s/g, '');
+        var unshared = null;
+        var unsharedIdx = -1;
+        for (var gl = 0; gl < guestLtrs.length; gl++) {
+          var char = guestLtrs[gl];
+          for (var ca = 0; ca < cleanAns.length; ca++) {
+            if (cleanAns[ca] === char && !state.twoMinds.slots[ca]) {
+              unshared = char;
+              unsharedIdx = ca;
+              break;
+            }
+          }
+          if (unshared) break;
+        }
+
+        if (unshared && unsharedIdx !== -1) {
+          state.twoMinds.slots[unsharedIdx] = {
+            letter: unshared,
+            owner: 'guest',
+            id: 'guest_help_' + Date.now()
+          };
+          if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
+          state.twoMindsChat.push({
+            text: '🤖 AI Partner: Maine akshar "' + unshared + '" slot ' + (unsharedIdx + 1) + ' me rakh diya! 💖',
+            type: 'partner'
+          });
+          showPartnerSpeechBubble('Maine "' + unshared + '" rakh diya! 💖', 'AI Partner');
+          Audio.playUnlock();
+          toast('🤝 AI Partner ne akshar "' + unshared + '" rakh diya!');
+        } else {
+          toast('AI Partner ke paas aur letter nahi hain!');
+        }
+      } else {
+        Net.send('TM_ASK_HELP', { requester: profile.name });
+        toast('Partner se help maangi! 🤝');
+      }
+      render();
+    } else if (action === 'tmSharePartnerLetter') {
+      Audio.playTap();
+      state.sharePartnerPrompt = false;
+      var unplaced = (state.twoMinds.myRack || []).find(function (t) { return !t.placed; }) || state.twoMinds.myRack[0];
+      if (unplaced) {
+        Net.send('TM_GIVE_HELP', { sharedLetter: unplaced.letter, helper: profile.name });
+        toast('Partner ke saath letter "' + unplaced.letter + '" share kiya! ✨');
+      }
+      render();
+    } else if (action === 'tmUseHint') {
+      Audio.playTap();
+      if (!state.twoMinds || state.twoMinds.isSolved || state.twoMinds.isTransitioning) return;
+      state.twoMinds.hintsUsed = (state.twoMinds.hintsUsed || 0) + 1;
+      state.twoMinds.teamScore = Math.max(0, (state.twoMinds.teamScore || 0) - 20);
+
+      var curPuzzle = state.twoMinds.deck ? state.twoMinds.deck[state.twoMinds.roundIndex] : null;
+      if (curPuzzle) {
+        var firstChar = curPuzzle.answer.charAt(0);
+        state.twoMinds.slots[0] = { letter: firstChar, owner: 'system', locked: true, id: 'hint_0' };
+        if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
+        var hintPayload = {
+          hintType: 'first_letter',
+          letter: firstChar,
+          hintDesc: 'Pehla akshar "' + firstChar + '" lock ho gaya! (-20 pts)'
+        };
+        state.twoMindsChat.push({ text: '💡 ' + hintPayload.hintDesc, type: 'system' });
+        if (Net.getStatus() === 'connected') {
+          Net.send('TM_USE_HINT', hintPayload);
+        }
+      }
+      Audio.playUnlock();
+      render();
+    } else if (action === 'tmQuickChip') {
+      Audio.playChime();
+      var chipText = target.dataset.text;
+      state.twoMindsChat.push({
+        text: chipText,
+        sender: profile.name,
+        type: 'me'
+      });
+      showPartnerSpeechBubble(chipText, profile.name);
+      if (Net.getStatus() === 'connected') {
+        Net.send('TM_QUICK_MSG', { text: chipText, sender: profile.name });
+      } else if (state.twoMinds && state.twoMinds.isSolo) {
+        setTimeout(function () {
+          var aiReplies = ['Haan main soch raha hoon! 🤔', 'Mere paas bhi acche letters hain! 🔤', 'Sahi jaa rahe hain hum! 💖', 'Chalo saath me try karte hain! ✨'];
+          var reply = aiReplies[Math.floor(Math.random() * aiReplies.length)];
+          if (state.twoMinds) {
+            state.twoMindsChat.push({ text: reply, sender: 'AI Partner', type: 'partner' });
+            showPartnerSpeechBubble(reply, 'AI Partner');
+            Audio.playChime();
+            render();
+          }
+        }, 900);
+      }
+      render();
+    } else if (action === 'twoMindsPlayAgain') {
+      Audio.playTap();
+      if (state.twoMindsResults && state.twoMindsResults.isSolo) {
+        launchTwoMindsSolo();
+      } else {
+        state.screen = 'room_ready';
+        render();
+      }
+    } else if (action === 'twoMindsLeave') {
+      Audio.playTap();
+      if (TwoMinds) TwoMinds.cleanup();
+      state.twoMinds = null;
+      if (Net.getStatus() === 'connected') {
+        state.screen = 'room_ready';
+        Net.send('RETURN_LOBBY', {});
+      } else {
+        state.screen = 'lobby';
+      }
+      render();
     }
   });
 
