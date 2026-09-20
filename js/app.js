@@ -619,7 +619,7 @@
   function renderHeader() {
     return '<div class="garland"></div>' +
       '<header class="app-header">' +
-      '<div class="brand-title">Jodi Games <span class="brand-tag">Online</span></div>' +
+      '<div class="brand-title">Jodi Sync <span class="brand-tag">Online</span></div>' +
       '<div class="header-actions">' +
       '<button class="icon-btn" data-action="openGuide" title="Khelne Ka Tareeka (User Guide)">📖</button>' +
       '<button class="icon-btn" data-action="openSettings" title="Settings (⚙️)">⚙️</button>' +
@@ -1119,7 +1119,7 @@
       var isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
       m.innerHTML = '<div class="modal-sheet install-modal-sheet">' +
         '<div class="guide-header">' +
-        '<div class="guide-title"><span>📲</span> Jodi App Install Karein</div>' +
+        '<div class="guide-title"><span>📲</span> Jodi Sync Install Karein</div>' +
         '<button class="pwa-dismiss-btn" data-action="closeModal" style="color:var(--plum);font-size:20px">✕</button>' +
         '</div>' +
         '<div class="install-prompt-body">' +
@@ -1141,7 +1141,7 @@
             '<div class="inst-step-item"><span class="inst-step-num">3</span><div>Popup me <b>"Install"</b> confirm karein — app seedhe download ho jayegi!</div></div>' +
             '</div></div>' +
             '<div class="guide-badge-box">' +
-            '<span>💡 <b>Pehle se Install hai?</b> Agar aapne pehle install kar rakha hai, to aapke phone ki home screen par <b>"Jodi Games"</b> icon pehle se maujood hai — wahan se kholein!</span>' +
+            '<span>💡 <b>Pehle se Install hai?</b> Agar aapne pehle install kar rakha hai, to aapke phone ki home screen par <b>"Jodi Sync"</b> icon pehle se maujood hai — wahan se kholein!</span>' +
             '</div>'
         ) +
         '<div style="display:flex;gap:8px;margin-top:14px">' +
@@ -1234,10 +1234,10 @@
         // Section 5: Guide & Install Links
         '<div style="display:flex;flex-direction:column;gap:8px;padding-top:4px">' +
         '<button class="btn ghost sm" data-action="openGuideFromSettings">📖 Khelne Ka Tareeka (User Guide)</button>' +
-        '<button class="btn ghost sm" data-action="installPwa">📲 Jodi App Install Karein</button>' +
+        '<button class="btn ghost sm" data-action="installPwa">📲 Jodi Sync Install Karein</button>' +
         '</div>' +
 
-        '<div class="settings-version-tag">Jodi Games v2.1 • Handcrafted with ❤️ for Couples</div>' +
+        '<div class="settings-version-tag">Jodi Sync v2.4 • Handcrafted with ❤️ for Couples</div>' +
         '</div>' +
         '</aside>';
 
@@ -1679,7 +1679,7 @@
         pEvent.prompt();
         pEvent.userChoice.then(function (choice) {
           if (choice.outcome === 'accepted') {
-            toast('Shukriya! Jodi App install ho raha hai... 📲');
+            toast('Shukriya! Jodi Sync install ho raha hai... 📲');
             isPwaDismissed = true;
             updatePwaBannerVisibility();
           }
@@ -1723,7 +1723,7 @@
       promptEvent.prompt();
       promptEvent.userChoice.then(function (choice) {
         if (choice.outcome === 'accepted') {
-          toast('Shukriya! Jodi App install ho raha hai... 📲');
+          toast('Shukriya! Jodi Sync install ho raha hai... 📲');
           isPwaDismissed = true;
           updatePwaBannerVisibility();
         }
@@ -1749,7 +1749,7 @@
     window.deferredInstallPrompt = null;
     isPwaDismissed = true;
     updatePwaBannerVisibility();
-    toast('🎉 Jodi App successfully install ho gaya!');
+    toast('🎉 Jodi Sync successfully install ho gaya!');
   });
 
   // Service Worker Registration with Instant Auto-Update Check

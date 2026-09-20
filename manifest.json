@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Jodi Games — Couples Scribble & 3D Race",
-  "short_name": "Jodi Games",
+  "name": "Jodi Sync — Couples Scribble & 3D Race",
+  "short_name": "Jodi Sync",
   "description": "Multiplayer Scribble Draw & Guess and 3D Superbike Racing for Indian couples.",
   "start_url": "./index.html",
   "scope": "./",

@@ -1,5 +1,5 @@
-/* Jodi Games Service Worker - Offline, PWA Caching & Instant Auto-Update */
-const CACHE_NAME = 'jodi-v2.3';
+/* Jodi Sync Service Worker - Offline, PWA Caching & Instant Auto-Update */
+const CACHE_NAME = 'jodi-v2.4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
