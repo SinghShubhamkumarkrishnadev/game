@@ -166,6 +166,7 @@
     }
 
     peer.on('open', function () {
+      if (connectionStatus !== 'creating') return;
       connectionStatus = 'waiting';
       emit('statusChange', connectionStatus);
       emit('roomCreated', { roomCode: activeRoomCode });
@@ -177,10 +178,12 @@
     });
 
     peer.on('error', function (err) {
+      if (connectionStatus === 'disconnected') return;
       console.warn('[JodiNet] Peer error during create:', err);
       if (err.type === 'unavailable-id') {
-        // Retry with another fresh code
-        createRoom(name, avatar, callback);
+        if (connectionStatus === 'creating') {
+          createRoom(name, avatar, callback);
+        }
       } else {
         emit('error', err);
         if (callback) callback(err);
@@ -221,12 +224,14 @@
     }
 
     peer.on('open', function () {
+      if (connectionStatus !== 'joining') return;
       var c = peer.connect(hostPeerId, { reliable: true });
       setupConnection(c);
       if (callback) callback(null, activeRoomCode);
     });
 
     peer.on('error', function (err) {
+      if (connectionStatus === 'disconnected') return;
       console.warn('[JodiNet] Peer error during join:', err);
       emit('error', err);
       if (callback) callback(err);
@@ -259,6 +264,7 @@
     createRoom: createRoom,
     joinRoom: joinRoom,
     leaveRoom: leaveRoom,
+    cancelRoom: leaveRoom,
     getStatus: function () { return connectionStatus; },
     getRoomCode: function () { return activeRoomCode; },
     isHostUser: function () { return isHost; },
