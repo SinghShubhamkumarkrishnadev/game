@@ -690,16 +690,14 @@
       '</form>' +
       '</div>';
 
-    return '<section class="screen scribble-arena-screen">' +
+    return '<section class="screen scribble-arena-screen" style="padding-bottom:10px">' +
       popupHtml +
       offlineBannerHtml +
       soloBarHtml +
       topBarHtml +
       bannerHtml +
-      '<div class="scribble-arena-canvas-zone">' +
       canvasHtml +
       toolsHtml +
-      '</div>' +
       chatSectionHtml +
       '</section>';
   }
@@ -981,51 +979,6 @@
   function bindGuessForm() {
     var form = $('#guessForm');
     if (!form) return;
-
-    // ── Keyboard-Safe Chat Input ────────────────────────────────────────────
-    // When the soft keyboard opens on mobile the `visualViewport` shrinks.
-    // We measure the difference between the window height and the viewport
-    // height to find the keyboard's intrusion height, then set it as a CSS
-    // custom property on the arena section so the chat panel slides above it.
-    var arenaEl = document.querySelector('.scribble-arena-screen');
-
-    function syncKeyboardOffset() {
-      if (!arenaEl) return;
-      var vv = window.visualViewport;
-      if (!vv) return;
-      // Keyboard offset = how much the viewport shrank from its natural height
-      var naturalH = window.innerHeight;
-      var visibleH = vv.height;
-      var kbOffset = Math.max(0, naturalH - visibleH - vv.offsetTop);
-      arenaEl.style.setProperty('--arena-bottom', kbOffset > 10 ? kbOffset + 'px' : '0px');
-    }
-
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', syncKeyboardOffset);
-      window.visualViewport.addEventListener('scroll', syncKeyboardOffset);
-    }
-
-    // Prevent the browser's built-in "scroll focused input into view" from
-    // jerking the canvas upward — we handle positioning ourselves above.
-    var inputEl = $('#guessInput');
-    if (inputEl) {
-      inputEl.addEventListener('focus', function () {
-        // Tiny delay lets the keyboard start opening before we correct offset
-        setTimeout(syncKeyboardOffset, 80);
-        // Prevent the shell from scrolling the input into view
-        var shell = document.getElementById('view');
-        if (shell) {
-          shell.scrollTop = 0;
-        }
-      });
-      inputEl.addEventListener('blur', function () {
-        // Keyboard closed — reset bottom offset
-        if (arenaEl) arenaEl.style.setProperty('--arena-bottom', '0px');
-        if (window.visualViewport) syncKeyboardOffset();
-      });
-    }
-    // ── End keyboard safe block ─────────────────────────────────────────────
-
     form.onsubmit = function (e) {
       e.preventDefault();
       var input = $('#guessInput');
