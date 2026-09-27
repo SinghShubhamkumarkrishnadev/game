@@ -129,6 +129,17 @@
    * ═══════════════════════════════════════════════════════════════ */
 
   /**
+   * Renders the top arena bar with Exit button and game mode indicator.
+   */
+  function _renderTopBar(ttt) {
+    var modeLabel = ttt.isSolo ? '🤖 Solo vs AI' : '👫 Partner Match';
+    return '<div class="ttt-topbar">' +
+      '<button type="button" class="ttt-exit-pill" data-action="tttLeave" title="Game se bahar niklein">🚪 Exit</button>' +
+      '<span class="ttt-topbar-badge">' + modeLabel + '</span>' +
+    '</div>';
+  }
+
+  /**
    * Renders a small glowing gem/dot next to whichever player is on turn.
    */
   function _renderTurnGem(symbol) {
@@ -442,6 +453,7 @@
     var Lobby = global.JodiLobby;
     var headerHtml = Lobby ? Lobby.renderHeader() : '';
 
+    var topBarHtml = _renderTopBar(ttt);
     var scoreboardHtml = _renderScoreboard(ttt, mySymbol);
     var statusHtml = _renderStatusBanner(ttt, isMyTurn);
     var boardHtml = _renderBoard(ttt, isMyTurn);
@@ -451,6 +463,7 @@
     return '<section class="screen ttt-screen">' +
       headerHtml +
       '<div class="ttt-container">' +
+        topBarHtml +
         scoreboardHtml +
         statusHtml +
         '<div class="ttt-board-wrap">' +

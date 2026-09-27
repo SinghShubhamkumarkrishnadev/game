@@ -420,6 +420,8 @@
     state.game = null;
     if (TwoMinds) TwoMinds.cleanup();
     state.twoMinds = null;
+    if (TTTUI && TTTUI.cleanup) TTTUI.cleanup();
+    state.ttt = null;
     state.screen = 'room_ready';
     toast('Room Lobby mein wapas aa gaye 🏠');
     render();
@@ -1328,8 +1330,10 @@
       if (Net.getStatus() === 'connected') {
         state.screen = 'room_ready';
         Net.send('RETURN_LOBBY', {});
+        toast('Room Lobby mein wapas aa gaye 🏠');
       } else {
         state.screen = 'lobby';
+        toast('Lobby mein wapas aa gaye 🏠');
       }
       render();
     } else if (action === 'soloPracticeTwoMinds') {
