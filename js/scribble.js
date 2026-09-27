@@ -557,13 +557,11 @@
         '</div>';
     }
 
-    // Top Bar
-    var exitBtnLabel = isSolo ? '🚪 Exit' : '🚪 Chhodo';
+    // Top Bar (Exit Icon, Countdown Timer, Word Counter)
     var topBarHtml = '<div class="arena-topbar">' +
-      '<button type="button" class="btn-exit-scribble" data-action="exitScribbleGame" title="Game se bahar niklein">' + exitBtnLabel + '</button>' +
-      '<span class="role-badge">' + (isDrawer ? '🖌️ Aap Draw Kar Rahe Ho' : '👀 ' + esc(drawerName) + ' Draw Kar Rahe Hain') + '</span>' +
+      '<button type="button" class="btn-exit-scribble" data-action="exitScribbleGame" title="Game se bahar niklein" aria-label="Exit Game">🚪</button>' +
       '<span class="timer-pill" id="timerDisplay">⏱️ 60s</span>' +
-      '<span class="live-pill" style="padding:3px 8px">Word ' + turnNumber + '/' + totalTurns + '</span>' +
+      '<span class="live-pill word-counter-pill">Word ' + turnNumber + '/' + totalTurns + '</span>' +
       '</div>';
 
     // Partner Offline In-Arena Alert
