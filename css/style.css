@@ -447,28 +447,26 @@ html, body {
 /* ================= SCRIBBLE ARENA (COMPACT FOR ALL PHONES) ================= */
 
 .btn-exit-scribble {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
   background: var(--surface);
   border: 1.5px solid var(--stroke);
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  line-height: 1;
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 800;
   color: var(--bad);
   cursor: pointer;
   box-shadow: 0 1.5px 0 var(--stroke);
+  white-space: nowrap;
   flex-shrink: 0;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1.2;
   transition: transform 0.1s, background 0.1s;
 }
 
 .btn-exit-scribble:active {
-  transform: translateY(1px) scale(0.94);
+  transform: translateY(1px) scale(0.95);
   box-shadow: 0 0.5px 0 var(--stroke);
   background: var(--bad-soft);
 }
@@ -1570,11 +1568,9 @@ html, body {
     margin-bottom: 4px;
   }
   .btn-exit-scribble {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
-    font-size: 13px;
+    padding: 3px 8px;
+    font-size: 11px;
+    gap: 2px;
   }
   .timer-pill {
     font-size: 13px;

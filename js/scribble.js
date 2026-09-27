@@ -557,9 +557,9 @@
         '</div>';
     }
 
-    // Top Bar (Exit Icon, Countdown Timer, Word Counter)
+    // Top Bar (Exit Button, Countdown Timer, Word Counter)
     var topBarHtml = '<div class="arena-topbar">' +
-      '<button type="button" class="btn-exit-scribble" data-action="exitScribbleGame" title="Game se bahar niklein" aria-label="Exit Game">🚪</button>' +
+      '<button type="button" class="btn-exit-scribble" data-action="exitScribbleGame" title="Game se bahar niklein">🚪 Exit</button>' +
       '<span class="timer-pill" id="timerDisplay">⏱️ 60s</span>' +
       '<span class="live-pill word-counter-pill">Word ' + turnNumber + '/' + totalTurns + '</span>' +
       '</div>';
