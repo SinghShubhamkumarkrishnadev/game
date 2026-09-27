@@ -1,4 +1,6 @@
 /* Jodi Sync — Tic-Tac-Toe Presentation & Interaction Orchestrator
+ * Artisan Board Edition — handcrafted teakwood board, rose-gold / jade tokens.
+ *
  * SOLID Architecture:
  * - Single Responsibility: Manages TTT UI components, celebration modal, drag-and-drop, and AI scheduling.
  * - Open/Closed: Celebration effects and AI strategies are modular and consumed via clean public interfaces.
@@ -26,6 +28,24 @@
   var _docMouseMove = null;
   var _docMouseUp = null;
 
+  /* ─── UI-only presentation state (does not touch domain model) ───
+   * Tracks the index of the most recently placed piece so only THAT
+   * piece plays the physical drop/settle animation on render, instead
+   * of every filled cell replaying it on every re-render. Auto-clears
+   * shortly after so an unrelated later re-render (e.g. triggered by
+   * something outside this screen) won't replay a stale animation. */
+  var _lastPlacedIdx = -1;
+  var _lastPlacedClearTimer = null;
+
+  function _markJustPlaced(idx) {
+    _lastPlacedIdx = idx;
+    if (_lastPlacedClearTimer) clearTimeout(_lastPlacedClearTimer);
+    _lastPlacedClearTimer = setTimeout(function () {
+      _lastPlacedIdx = -1;
+      _lastPlacedClearTimer = null;
+    }, 700);
+  }
+
   function init(appContext) {
     ctx = appContext;
   }
@@ -52,6 +72,7 @@
     game.scores = { X: 0, O: 0, draws: 0 };
     game.roundCount = 1;
 
+    _lastPlacedIdx = -1;
     c.state.ttt = game;
     c.state.screen = 'ttt';
     if (c.Audio && c.Audio.playTap) c.Audio.playTap();
@@ -61,6 +82,14 @@
   /* ═══════════════════════════════════════════════════════════════
    * 2. UI Sub-Renderers (ISP & SRP: Focused Component Renderers)
    * ═══════════════════════════════════════════════════════════════ */
+
+  /**
+   * Renders a small glowing gem/dot next to whichever player is on turn.
+   */
+  function _renderTurnGem(symbol) {
+    var gemClass = symbol === 'X' ? 'gem-rose' : 'gem-emerald';
+    return '<span class="ttt-turn-gem ' + gemClass + '" aria-hidden="true"></span>';
+  }
 
   /**
    * Renders the couple scoreboard with scores, round count, and turn indicator.
@@ -78,6 +107,7 @@
 
     return '<div class="ttt-scoreboard">' +
       '<div class="ttt-score-cell ' + (isTurnX ? 'active-turn' : '') + '">' +
+        (isTurnX ? _renderTurnGem('X') : '') +
         '<div class="ttt-score-sym x-sym">✕</div>' +
         '<div class="ttt-score-name">' + xName + '</div>' +
         '<div class="ttt-score-pts">' + ttt.scores.X + '</div>' +
@@ -87,6 +117,7 @@
         '<div class="ttt-draws-label">🤝 ' + ttt.scores.draws + ' Barabar</div>' +
       '</div>' +
       '<div class="ttt-score-cell ' + (isTurnO ? 'active-turn' : '') + '">' +
+        (isTurnO ? _renderTurnGem('O') : '') +
         '<div class="ttt-score-sym o-sym">◯</div>' +
         '<div class="ttt-score-name">' + oName + '</div>' +
         '<div class="ttt-score-pts">' + ttt.scores.O + '</div>' +
@@ -123,7 +154,9 @@
   };
 
   /**
-   * Renders the animated cut-through SVG line connecting winning cells.
+   * Renders the animated cut-through SVG line connecting winning cells, as a
+   * molten-gold (X) or jade-glow (O) slash with soft bloom, drawn on with a
+   * dash-offset reveal. Definitions are inlined per-render (cheap, scoped).
    */
   function _renderWinLineSvg(winLine, winner) {
     if (!winLine || winLine.length < 3) return '';
@@ -134,13 +167,34 @@
     var colorClass = (winner === 'O') ? 'line-o' : 'line-x';
 
     return '<svg class="ttt-win-line-svg ' + colorClass + '" viewBox="0 0 300 300" aria-hidden="true">' +
+      '<defs>' +
+        '<filter id="tttWinGlow" x="-60%" y="-60%" width="220%" height="220%">' +
+          '<feGaussianBlur stdDeviation="6" result="tttBlur" />' +
+          '<feMerge>' +
+            '<feMergeNode in="tttBlur" />' +
+            '<feMergeNode in="SourceGraphic" />' +
+          '</feMerge>' +
+        '</filter>' +
+        '<linearGradient id="tttGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">' +
+          '<stop offset="0%" stop-color="#fff3c4" />' +
+          '<stop offset="45%" stop-color="#f3b940" />' +
+          '<stop offset="100%" stop-color="#b9781f" />' +
+        '</linearGradient>' +
+        '<linearGradient id="tttTealGrad" x1="0%" y1="0%" x2="100%" y2="100%">' +
+          '<stop offset="0%" stop-color="#eafaf3" />' +
+          '<stop offset="45%" stop-color="#4fd8b8" />' +
+          '<stop offset="100%" stop-color="#0e7a63" />' +
+        '</linearGradient>' +
+      '</defs>' +
       '<line class="ttt-win-line-glow" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '" pathLength="100" />' +
       '<line class="ttt-win-line-core" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '" pathLength="100" />' +
     '</svg>';
   }
 
   /**
-   * Renders the 3×3 mahogany wooden board and cells with winning cut-through line.
+   * Renders the 3×3 teakwood board and cells with winning cut-through line.
+   * Only the most-recently-placed piece (tracked in _lastPlacedIdx) gets the
+   * drop/settle entrance animation, so replays don't shake up the whole board.
    */
   function _renderBoard(ttt, isMyTurn) {
     var boardHtml = '<div class="ttt-board" id="tttBoard">';
@@ -156,7 +210,8 @@
         ' data-action="tttCellTap" data-idx="' + i + '"' +
         ' data-droptarget="true">';
       if (cell) {
-        boardHtml += '<span class="ttt-piece ' + (cell === 'X' ? 'ttt-x' : 'ttt-o') + '">' +
+        var enterClass = (i === _lastPlacedIdx) ? ' ttt-piece-enter' : '';
+        boardHtml += '<span class="ttt-piece ' + (cell === 'X' ? 'ttt-x' : 'ttt-o') + enterClass + '">' +
           (cell === 'X' ? '✕' : '◯') +
         '</span>';
       } else if (isMyTurn) {
@@ -175,7 +230,7 @@
   }
 
   /**
-   * Renders the draggable piece token in the tray.
+   * Renders the draggable piece token resting in its velvet-lined tray recess.
    * Requirement: "button se grag text nikal do bas X rkho" — only piece symbol rendered, zero drag text!
    */
   function _renderPieceTray(ttt, mySymbol, isMyTurn) {
@@ -191,8 +246,10 @@
           : (ttt.isSolo ? 'AI khel raha hai...' : 'Partner ka intezar karein...')) +
       '</div>' +
       '<div class="ttt-tray-tokens">' +
-        '<div class="ttt-tray-token ' + (isMyTurn ? 'ttt-token-draggable' : 'ttt-token-inactive') + '" id="tttDragToken" title="Tap ya drag karke board par rakhein">' +
-          '<span class="ttt-piece ' + pieceClass + ' ttt-piece-lg">' + pieceSymbol + '</span>' +
+        '<div class="ttt-tray-recess">' +
+          '<div class="ttt-tray-token ' + (isMyTurn ? 'ttt-token-draggable' : 'ttt-token-inactive') + '" id="tttDragToken" title="Tap ya drag karke board par rakhein">' +
+            '<span class="ttt-piece ' + pieceClass + ' ttt-piece-lg">' + pieceSymbol + '</span>' +
+          '</div>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -471,6 +528,7 @@
     }
 
     state.ttt = newGame;
+    _markJustPlaced(idx);
 
     if (c.Audio) {
       if (newGame.winner) {
@@ -497,7 +555,7 @@
   }
 
   function _scheduleAIMove() {
-    var delay = 460 + Math.floor(Math.random() * 320);
+    var delay = 450 + Math.floor(Math.random() * 331); // 450ms – 780ms human-like pause
     setTimeout(function () {
       var c = getCtx();
       var state = c.state;
@@ -525,6 +583,7 @@
       }
 
       state.ttt = afterAI;
+      _markJustPlaced(aiIdx);
 
       if (c.Audio) {
         if (afterAI.winner) {
@@ -573,6 +632,9 @@
       roundCount: roundCount
     });
 
+    _lastPlacedIdx = -1;
+    if (_lastPlacedClearTimer) { clearTimeout(_lastPlacedClearTimer); _lastPlacedClearTimer = null; }
+
     state.ttt = newGame;
     if (c.Audio && c.Audio.playTap) c.Audio.playTap();
     if (c.render) c.render();
@@ -585,6 +647,8 @@
 
   function cleanup() {
     _cleanupDragListeners();
+    _lastPlacedIdx = -1;
+    if (_lastPlacedClearTimer) { clearTimeout(_lastPlacedClearTimer); _lastPlacedClearTimer = null; }
     if (global.JodiTTTFx && global.JodiTTTFx.stopSprinkler) {
       global.JodiTTTFx.stopSprinkler();
     }
