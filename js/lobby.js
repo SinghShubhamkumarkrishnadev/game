@@ -106,7 +106,20 @@
           '<h2 style="font-family:var(--font-display);font-size:24px;color:var(--plum)">Room Join Karo</h2>' +
           '<p style="color:var(--soft);font-size:14px;margin-bottom:12px">Partner ne code share kiya hai? Code daal kar unke room mein jud jao.</p>' +
           '<button class="btn alt" data-action="openJoinModal">Code Daalo 📲</button>' +
-          '</div></div>'
+          '</div>' +
+          '<div class="solo-arcade-entry" id="soloArcadeEntry">' +
+          '<div class="solo-arcade-inner">' +
+          '<div class="solo-arcade-left">' +
+          '<span class="solo-arcade-glyph">🕹️</span>' +
+          '<div>' +
+          '<div class="solo-arcade-heading">Solo Play &amp; Check</div>' +
+          '<div class="solo-arcade-sub">Akele teeno games try karo — partner ka wait nahi</div>' +
+          '</div>' +
+          '</div>' +
+          '<button class="btn solo-arcade-btn" data-action="openSoloArcade">Try karo</button>' +
+          '</div>' +
+          '</div>' +
+          '</div>'
         : '') +
       '</section>';
   }
@@ -166,6 +179,11 @@
       '<div class="gm-title">3D Race</div>' +
       '<div class="gm-desc">Curvy Track</div>' +
       '</div>' +
+      '<div class="game-mode-tile ' + (mode === 'ttt' ? 'active' : '') + '" data-action="setMode" data-mode="ttt">' +
+      '<span class="gm-icon">⭕</span>' +
+      '<div class="gm-title">X & O</div>' +
+      '<div class="gm-desc">Tic-Tac-Toe</div>' +
+      '</div>' +
       '</div>' +
 
       // Mode-specific configuration
@@ -207,40 +225,51 @@
               ? '<button class="btn primary" data-action="startMatch">Khelna Shuru Karein 🎨</button>'
               : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host match shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
             )
-          : '<div class="settings-section">' +
-            '<div class="settings-label"><span>🏍️ Apni Superbike Chuno</span><small>' + state.selectedBikeTheme.toUpperCase() + '</small></div>' +
-            '<div class="bike-select-grid">' +
-            '<div class="bike-card ' + (state.selectedBikeTheme === 'sport' ? 'active' : '') + '" data-action="pickBike" data-bike="sport">' +
-            '<span class="bike-icon">🏁</span>' +
-            '<div class="bike-name">Rani Neon Sport</div>' +
-            '<div class="bike-tag">1000cc V4 MotoGP • Winglets</div>' +
-            '<div class="bike-color-bar" style="background:linear-gradient(90deg, #D6246E, #FFB000)"></div>' +
-            '</div>' +
-            '<div class="bike-card ' + (state.selectedBikeTheme === 'bullet' ? 'active' : '') + '" data-action="pickBike" data-bike="bullet">' +
-            '<span class="bike-icon">👑</span>' +
-            '<div class="bike-name">Royal Bullet 350</div>' +
-            '<div class="bike-tag">Heavy Cruiser • Chrome Thump</div>' +
-            '<div class="bike-color-bar" style="background:linear-gradient(90deg, #1A1A1A, #D4AF37)"></div>' +
-            '</div>' +
-            '<div class="bike-card ' + (state.selectedBikeTheme === 'turbo' ? 'active' : '') + '" data-action="pickBike" data-bike="turbo">' +
-            '<span class="bike-icon">⚡</span>' +
-            '<div class="bike-name">Mor Teal Turbo</div>' +
-            '<div class="bike-tag">Supercharged V4 • Cyber Beast</div>' +
-            '<div class="bike-color-bar" style="background:linear-gradient(90deg, #0B7A7C, #38E1E4)"></div>' +
-            '</div>' +
-            '<div class="bike-card ' + (state.selectedBikeTheme === 'cafe' ? 'active' : '') + '" data-action="pickBike" data-bike="cafe">' +
-            '<span class="bike-icon">☕</span>' +
-            '<div class="bike-name">Kesar Cafe Racer</div>' +
-            '<div class="bike-tag">650cc Twin • Neo-Retro Custom</div>' +
-            '<div class="bike-color-bar" style="background:linear-gradient(90deg, #E65100, #FFD54F)"></div>' +
-            '</div></div>' +
-            '<p style="font-size:12px;color:var(--soft);margin-bottom:8px;font-weight:700">3D Real Physics • Procedural Curvy Track • Nitro Booster</p>' +
-            '</div>' +
-            (isHost
-              ? '<button class="btn gold" data-action="startRace">Race Shuru Karein 🏍️💨</button>'
-              : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host race shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
-            )
+          : (mode === 'race'
+            ? '<div class="settings-section">' +
+              '<div class="settings-label"><span>🏍️ Apni Superbike Chuno</span><small>' + state.selectedBikeTheme.toUpperCase() + '</small></div>' +
+              '<div class="bike-select-grid">' +
+              '<div class="bike-card ' + (state.selectedBikeTheme === 'sport' ? 'active' : '') + '" data-action="pickBike" data-bike="sport">' +
+              '<span class="bike-icon">🏁</span>' +
+              '<div class="bike-name">Rani Neon Sport</div>' +
+              '<div class="bike-tag">1000cc V4 MotoGP • Winglets</div>' +
+              '<div class="bike-color-bar" style="background:linear-gradient(90deg, #D6246E, #FFB000)"></div>' +
+              '</div>' +
+              '<div class="bike-card ' + (state.selectedBikeTheme === 'bullet' ? 'active' : '') + '" data-action="pickBike" data-bike="bullet">' +
+              '<span class="bike-icon">👑</span>' +
+              '<div class="bike-name">Royal Bullet 350</div>' +
+              '<div class="bike-tag">Heavy Cruiser • Chrome Thump</div>' +
+              '<div class="bike-color-bar" style="background:linear-gradient(90deg, #1A1A1A, #D4AF37)"></div>' +
+              '</div>' +
+              '<div class="bike-card ' + (state.selectedBikeTheme === 'turbo' ? 'active' : '') + '" data-action="pickBike" data-bike="turbo">' +
+              '<span class="bike-icon">⚡</span>' +
+              '<div class="bike-name">Mor Teal Turbo</div>' +
+              '<div class="bike-tag">Supercharged V4 • Cyber Beast</div>' +
+              '<div class="bike-color-bar" style="background:linear-gradient(90deg, #0B7A7C, #38E1E4)"></div>' +
+              '</div>' +
+              '<div class="bike-card ' + (state.selectedBikeTheme === 'cafe' ? 'active' : '') + '" data-action="pickBike" data-bike="cafe">' +
+              '<span class="bike-icon">☕</span>' +
+              '<div class="bike-name">Kesar Cafe Racer</div>' +
+              '<div class="bike-tag">650cc Twin • Neo-Retro Custom</div>' +
+              '<div class="bike-color-bar" style="background:linear-gradient(90deg, #E65100, #FFD54F)"></div>' +
+              '</div></div>' +
+              '<p style="font-size:12px;color:var(--soft);margin-bottom:8px;font-weight:700">3D Real Physics • Procedural Curvy Track • Nitro Booster</p>' +
+              '</div>' +
+              (isHost
+                ? '<button class="btn gold" data-action="startRace">Race Shuru Karein 🏍️💨</button>'
+                : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host race shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
+              )
+            : '<div class="settings-section" style="text-align:center">' +
+              '<div style="font-size:40px;margin-bottom:6px">⭕</div>' +
+              '<div style="font-family:var(--font-display);font-size:20px;color:var(--plum);margin-bottom:4px">X aur O — Tic-Tac-Toe</div>' +
+              '<p style="font-size:13px;color:var(--soft);margin-bottom:10px">Host → X (pehli chaal). Guest → O. Har round mein pehli chaal alternate hogi.</p>' +
+              '</div>' +
+              (isHost
+                ? '<button class="btn ttt-lobby-btn" data-action="startTTT">X &amp; O Shuru Karein ⭕✕</button>'
+                : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host game shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
+              )
           )
+        )
       ) +
       '<div style="margin-top:8px">' +
       '<button class="btn ghost sm" data-action="leaveRoom">Room Se Niklo</button>' +

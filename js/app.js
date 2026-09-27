@@ -11,6 +11,8 @@
   var Lobby = window.JodiLobby;
   var TwoMindsUI = window.JodiTwoMindsUI;
   var Race = window.JodiRace;
+  var SoloArcade = window.JodiSoloArcade;
+  var TTTUI = window.JodiTTTUI;
 
   /* Helper utilities */
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
@@ -145,6 +147,8 @@
   if (Scribble && Scribble.init) Scribble.init(appContext);
   if (Lobby && Lobby.init) Lobby.init(appContext);
   if (TwoMindsUI && TwoMindsUI.init) TwoMindsUI.init(appContext);
+  if (SoloArcade && SoloArcade.init) SoloArcade.init(appContext);
+  if (TTTUI && TTTUI.init) TTTUI.init(appContext);
 
   /* Network Event Handlers */
   Net.on('statusChange', function (status) {
@@ -781,6 +785,8 @@
     else if (state.screen === 'race_results') html = vRaceResults();
     else if (state.screen === 'twominds') html = TwoMindsUI ? TwoMindsUI.vGame() : '';
     else if (state.screen === 'twominds_results') html = TwoMindsUI ? TwoMindsUI.vResults() : '';
+    else if (state.screen === 'solo_arcade') html = SoloArcade ? SoloArcade.vArcade() : '';
+    else if (state.screen === 'ttt') html = TTTUI ? TTTUI.vGame() : '';
 
     view.innerHTML = html;
     renderModal();
@@ -834,8 +840,77 @@
           render();
         });
       }
+    } else if (state.screen === 'ttt' && TTTUI) {
+      if (TTTUI.bindBoardEvents) TTTUI.bindBoardEvents();
     }
   }
+
+  /* ─── TTT Network Event Handlers ─── */
+  Net.on('TTT_START', function (payload) {
+    var TTT = window.JodiTTT;
+    if (!TTT) return;
+    var game = TTT.createGame({
+      firstPlayer: 'X',
+      hostSymbol: 'X',
+      guestSymbol: 'O',
+      isSolo: false,
+      hostName: payload.hostName || Net.getPartnerName() || 'Host',
+      guestName: profile.name
+    });
+    game.mySymbol = 'O';
+    game.scores = { X: 0, O: 0, draws: 0 };
+    game.roundCount = 1;
+    state.ttt = game;
+    state.screen = 'ttt';
+    Audio.playTap();
+    toast('X aur O shuru! Aap O hain. Host pehle chalenge. ⭕');
+    render();
+  });
+
+  Net.on('TTT_MOVE', function (payload) {
+    var TTT = window.JodiTTT;
+    if (!state.ttt || !TTT) return;
+    var newGame = TTT.makeMove(state.ttt, payload.idx);
+    if (!newGame) return;
+    if (newGame.winner) {
+      newGame.scores = {
+        X: state.ttt.scores.X + (newGame.winner === 'X' ? 1 : 0),
+        O: state.ttt.scores.O + (newGame.winner === 'O' ? 1 : 0),
+        draws: state.ttt.scores.draws
+      };
+      Audio.playMatch();
+      burstCenter(30);
+    } else if (newGame.isDraw) {
+      newGame.scores = { X: state.ttt.scores.X, O: state.ttt.scores.O, draws: state.ttt.scores.draws + 1 };
+      Audio.playTap();
+    } else {
+      Audio.playTap();
+    }
+    state.ttt = newGame;
+    render();
+  });
+
+  Net.on('TTT_RESET', function (payload) {
+    var TTT = window.JodiTTT;
+    if (!state.ttt || !TTT) return;
+    var prevScores = payload.scores || state.ttt.scores;
+    var nextFirst = payload.firstPlayer || 'X';
+    var newGame = TTT.createGame({
+      firstPlayer: nextFirst,
+      hostSymbol: state.ttt.hostSymbol,
+      guestSymbol: state.ttt.guestSymbol,
+      isSolo: false,
+      hostName: state.ttt.hostName,
+      guestName: state.ttt.guestName
+    });
+    newGame.mySymbol = state.ttt.mySymbol;
+    newGame.scores = prevScores;
+    newGame.roundCount = (state.ttt.roundCount || 1) + 1;
+    state.ttt = newGame;
+    Audio.playTap();
+    toast('Naya round! ⭕✕ Shuru!');
+    render();
+  });
 
   /* User Actions Dispatcher */
   document.addEventListener('click', function (e) {
@@ -1173,6 +1248,95 @@
         Net.send('RETURN_LOBBY', {});
       }
       render();
+    } else if (action === 'openSoloArcade') {
+      Audio.playTap();
+      state.screen = 'solo_arcade';
+      render();
+    } else if (action === 'closeArcade') {
+      Audio.playTap();
+      state.screen = 'lobby';
+      render();
+    } else if (action === 'soloPlayTTT') {
+      Audio.playTap();
+      if (TTTUI && TTTUI.launchSolo) TTTUI.launchSolo();
+    } else if (action === 'soloPlayTwoMinds') {
+      Audio.playTap();
+      state.modal = null;
+      if (TwoMindsUI && TwoMindsUI.launchSolo) TwoMindsUI.launchSolo();
+    } else if (action === 'soloPlayScribble') {
+      Audio.playTap();
+      state.modal = null;
+      if (Scribble && Scribble.launchSolo) Scribble.launchSolo();
+    } else if (action === 'soloPlayRace') {
+      Audio.playTap();
+      state.modal = null;
+      var sSeed = Math.floor(Math.random() * 9000) + 1000;
+      state.raceTrackSeed = sSeed;
+      state.screen = 'race';
+      render();
+    } else if (action === 'startTTT') {
+      Audio.playTap();
+      if (!Net.isHostUser()) return;
+      var TTT = window.JodiTTT;
+      if (!TTT) return;
+      var tttGame = TTT.createGame({
+        firstPlayer: 'X',
+        hostSymbol: 'X',
+        guestSymbol: 'O',
+        isSolo: false,
+        hostName: profile.name,
+        guestName: Net.getPartnerName() || 'Partner'
+      });
+      tttGame.mySymbol = 'X';
+      tttGame.scores = { X: 0, O: 0, draws: 0 };
+      tttGame.roundCount = 1;
+      state.ttt = tttGame;
+      state.screen = 'ttt';
+      Net.send('TTT_START', { hostName: profile.name });
+      toast('X aur O shuru! Aap X hain. Pehli chaal aapki hai. ✕');
+      render();
+    } else if (action === 'tttCellTap') {
+      var cellIdx = +target.dataset.idx;
+      if (TTTUI && TTTUI.handleCellTap) TTTUI.handleCellTap(cellIdx);
+    } else if (action === 'tttPlayAgain') {
+      Audio.playTap();
+      var ttt = state.ttt;
+      if (!ttt) return;
+      if (ttt.isSolo) {
+        if (TTTUI && TTTUI.resetRound) TTTUI.resetRound(true);
+      } else if (Net.isHostUser()) {
+        var TTT2 = window.JodiTTT;
+        if (!TTT2) return;
+        var nextFirst = ttt.currentPlayer === 'X' ? 'O' : 'X';
+        var rGame = TTT2.createGame({
+          firstPlayer: nextFirst,
+          hostSymbol: ttt.hostSymbol,
+          guestSymbol: ttt.guestSymbol,
+          isSolo: false,
+          hostName: ttt.hostName,
+          guestName: ttt.guestName
+        });
+        rGame.mySymbol = ttt.mySymbol;
+        rGame.scores = ttt.scores;
+        rGame.roundCount = (ttt.roundCount || 1) + 1;
+        state.ttt = rGame;
+        Net.send('TTT_RESET', { firstPlayer: nextFirst, scores: ttt.scores });
+        toast('Naya round! ⭕✕ Shuru!');
+        render();
+      } else {
+        toast('Host naya round shuru karega!');
+      }
+    } else if (action === 'tttLeave') {
+      Audio.playTap();
+      if (TTTUI && TTTUI.cleanup) TTTUI.cleanup();
+      state.ttt = null;
+      if (Net.getStatus() === 'connected') {
+        state.screen = 'room_ready';
+        Net.send('RETURN_LOBBY', {});
+      } else {
+        state.screen = 'lobby';
+      }
+      render();
     } else if (action === 'soloPracticeTwoMinds') {
       if (TwoMindsUI && TwoMindsUI.launchSolo) TwoMindsUI.launchSolo();
     } else if (action === 'soloPracticeScribble') {
@@ -1181,8 +1345,8 @@
       Audio.playTap();
       state.modal = null;
       renderModal();
-      var sSeed = Math.floor(Math.random() * 9000) + 1000;
-      state.raceTrackSeed = sSeed;
+      var sSeed2 = Math.floor(Math.random() * 9000) + 1000;
+      state.raceTrackSeed = sSeed2;
       state.screen = 'race';
       render();
     } else if (action === 'twoMindsPlayAgain') {
