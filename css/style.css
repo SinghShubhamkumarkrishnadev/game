@@ -3820,6 +3820,26 @@ html, body {
   color: var(--soft);
 }
 
+.ttt-status-banner.ttt-status-win-interim {
+  background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+  border: 2px solid #D97706;
+  color: #78350F;
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.22);
+  animation: tttWinBannerPop 0.35s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.ttt-status-banner.ttt-status-draw-interim {
+  background: #F1F5F9;
+  border: 2px solid #94A3B8;
+  color: #334155;
+  animation: tttWinBannerPop 0.35s ease;
+}
+
+@keyframes tttWinBannerPop {
+  0% { transform: scale(0.94); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 .ttt-turn-pulse {
   display: inline-block;
   width: 8px;
@@ -3828,6 +3848,11 @@ html, body {
   background: var(--plum);
   box-shadow: 0 0 6px 2px rgba(75, 29, 107, 0.4);
   animation: tttGemPulse 1.2s ease-in-out infinite;
+}
+
+.ttt-turn-pulse.ttt-pulse-win {
+  background: #D97706;
+  box-shadow: 0 0 8px 2px rgba(217, 119, 6, 0.65);
 }
 
 /* ── Board wrap & teakwood frame (Artisan Board) ─────────────────── */

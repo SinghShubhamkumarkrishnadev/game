@@ -46,6 +46,33 @@
     }, 700);
   }
 
+  /* ─── Celebration Modal Reveal Delay State ───
+   * When a player wins, the SVG winning line smoothly slashes across the
+   * winning 3 cells (takes ~0.65s - 0.75s). We hold back the win/lose
+   * popup & dark backdrop for ~1350ms so players can clearly witness the full
+   * winning line formation and connecting path before the popup enters.
+   */
+  var _modalReady = false;
+  var _modalRevealTimer = null;
+
+  function _scheduleModalReveal(delay) {
+    if (_modalReady || _modalRevealTimer) return;
+    _modalRevealTimer = setTimeout(function () {
+      _modalRevealTimer = null;
+      _modalReady = true;
+      var c = getCtx();
+      if (c && c.render) c.render();
+    }, delay);
+  }
+
+  function _resetModalState() {
+    _modalReady = false;
+    if (_modalRevealTimer) {
+      clearTimeout(_modalRevealTimer);
+      _modalRevealTimer = null;
+    }
+  }
+
   function init(appContext) {
     ctx = appContext;
   }
@@ -73,6 +100,7 @@
     game.roundCount = 1;
 
     _lastPlacedIdx = -1;
+    _resetModalState();
     c.state.ttt = game;
     c.state.screen = 'ttt';
     if (c.Audio && c.Audio.playTap) c.Audio.playTap();
@@ -127,9 +155,30 @@
 
   /**
    * Renders in-game turn and status banner.
+   * If a win/draw just occurred, displays an interim banner pointing to the
+   * board/line formation while the celebration popup waits on timer.
    */
   function _renderStatusBanner(ttt, isMyTurn) {
-    if (ttt.winner || ttt.isDraw) return ''; // Replaced by celebration modal
+    if (ttt.winner) {
+      if (!_modalReady) {
+        var TTT = global.JodiTTT;
+        var res = TTT.getGameResult(ttt);
+        var headline = res ? res.headline : 'Shandaar Jeet!';
+        return '<div class="ttt-status-banner ttt-status-win-interim">' +
+          '<span class="ttt-turn-pulse ttt-pulse-win"></span> ✨ ' + esc(headline) + ' — Winning path dekhein!' +
+        '</div>';
+      }
+      return ''; // Replaced by celebration modal
+    }
+
+    if (ttt.isDraw) {
+      if (!_modalReady) {
+        return '<div class="ttt-status-banner ttt-status-draw-interim">' +
+          '🤝 Barabar Takkar! Match Draw!' +
+        '</div>';
+      }
+      return '';
+    }
 
     return '<div class="ttt-status-banner ' + (isMyTurn ? 'ttt-your-turn' : 'ttt-wait') + '">' +
       (isMyTurn
@@ -261,6 +310,7 @@
    */
   function _renderCelebrationModal(ttt, mySymbol, canReset) {
     if (!ttt.winner && !ttt.isDraw) return '';
+    if (!_modalReady) return ''; // Wait until winning line animation completes before popping up!
 
     var TTT = global.JodiTTT;
     var res = TTT.getGameResult(ttt);
@@ -346,6 +396,14 @@
     var ttt = c.state.ttt;
     if (!ttt) return '<section class="screen"></section>';
 
+    // Synchronize celebration modal timer lifecycle
+    if (!ttt.winner && !ttt.isDraw) {
+      _resetModalState();
+    } else if (!_modalReady && !_modalRevealTimer) {
+      // 1350ms delay for winning line to fully form and shine; 650ms for draw
+      _scheduleModalReveal(ttt.winner ? 1350 : 650);
+    }
+
     var Net = c.Net || global.JodiNet;
     var isConnected = Net && Net.getStatus() === 'connected';
     var mySymbol = ttt.mySymbol || 'X';
@@ -387,15 +445,15 @@
     var ttt = c.state && c.state.ttt;
 
     // Trigger celebratory upward sprinkler fountain when win popup enters
-    if (ttt && ttt.winner) {
+    if (ttt && ttt.winner && _modalReady) {
       var canvas = document.getElementById('tttSprinklerCanvas');
       if (canvas && global.JodiTTTFx && global.JodiTTTFx.startSprinkler) {
         setTimeout(function () {
           var curTTT = c.state && c.state.ttt;
-          if (curTTT && curTTT.winner) {
+          if (curTTT && curTTT.winner && _modalReady) {
             global.JodiTTTFx.startSprinkler(canvas, 3600);
           }
-        }, 500);
+        }, 120);
       }
     } else {
       if (global.JodiTTTFx && global.JodiTTTFx.stopSprinkler) {
@@ -609,6 +667,8 @@
     var ttt = state && state.ttt;
     if (!ttt) return;
 
+    _resetModalState();
+
     if (global.JodiTTTFx && global.JodiTTTFx.stopSprinkler) {
       global.JodiTTTFx.stopSprinkler();
     }
@@ -647,6 +707,7 @@
 
   function cleanup() {
     _cleanupDragListeners();
+    _resetModalState();
     _lastPlacedIdx = -1;
     if (_lastPlacedClearTimer) { clearTimeout(_lastPlacedClearTimer); _lastPlacedClearTimer = null; }
     if (global.JodiTTTFx && global.JodiTTTFx.stopSprinkler) {
