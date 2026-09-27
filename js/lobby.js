@@ -113,7 +113,7 @@
           '<span class="solo-arcade-glyph">🕹️</span>' +
           '<div>' +
           '<div class="solo-arcade-heading">Solo Play &amp; Check</div>' +
-          '<div class="solo-arcade-sub">Akele teeno games try karo — partner ka wait nahi</div>' +
+          '<div class="solo-arcade-sub">Akele Sabhi games try karo — partner ka wait nahi</div>' +
           '</div>' +
           '</div>' +
           '<button class="btn solo-arcade-btn" data-action="openSoloArcade">Try karo</button>' +

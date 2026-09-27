@@ -427,11 +427,7 @@
 
   /* Two Minds Network Event Handlers */
   Net.on('TM_START_MATCH', function (payload) {
-    state.twoMindsChat = [
-      { text: '🧩 Two Minds Match Shuru! Ek doosre se coordinate karein.', type: 'system' }
-    ];
-    state.partnerBubble = null;
-
+    state.selectedSlotIdx = null;
     state.twoMinds = {
       roundIndex: payload.roundIndex || 0,
       totalRounds: payload.totalRounds || 10,
@@ -441,17 +437,15 @@
       comboStreak: payload.combo || 0,
       maxCombo: payload.combo || 0,
       wordsSolved: payload.wordsSolved || 0,
-      hintsUsed: 0,
-      perfectRounds: 0,
-      askTokensRemaining: 3,
-      solveTimes: [],
       isSolved: false,
       isTransitioning: false,
       isSolo: false,
       wordLength: payload.wordLength,
-      myCategory: payload.category,
-      myClue: payload.guestClue,
+      category: payload.category,
+      clueA: payload.clueA,
+      clueB: payload.clueB,
       prompt: payload.prompt,
+      slotOwners: payload.slotOwners || [],
       slots: (function () {
         var arr = [];
         for (var i = 0; i < payload.wordLength; i++) arr.push(null);
@@ -464,7 +458,7 @@
 
     state.screen = 'twominds';
     Audio.playTap();
-    toast('🧩 Two Minds Shuru! Dono ke paas alag information hai.');
+    toast('🧩 Two Minds Shuru! Milkar shabd poora karein.');
     render();
   });
 
@@ -628,13 +622,16 @@
 
   Net.on('TM_ROUND_ADVANCE', function (payload) {
     if (!state.twoMinds) return;
+    state.selectedSlotIdx = null;
     state.twoMinds.roundIndex = payload.roundIndex;
     state.twoMinds.roundDuration = payload.roundDuration;
     state.twoMinds.roundEndAt = payload.roundEndAt;
     state.twoMinds.wordLength = payload.wordLength;
-    state.twoMinds.myCategory = payload.category;
-    state.twoMinds.myClue = payload.guestClue;
+    state.twoMinds.category = payload.category;
+    state.twoMinds.clueA = payload.clueA;
+    state.twoMinds.clueB = payload.clueB;
     state.twoMinds.prompt = payload.prompt;
+    state.twoMinds.slotOwners = payload.slotOwners || [];
     state.twoMinds.teamScore = payload.teamScore;
     state.twoMinds.comboStreak = payload.combo;
     state.twoMinds.wordsSolved = payload.wordsSolved;
@@ -1086,6 +1083,8 @@
       var tmDeck = TwoMinds ? TwoMinds.getDeck(tmSettings.wordCount || 10, tmSettings.mode || 'classic') : [];
       var tmMatch = TwoMinds ? TwoMinds.createMatch(tmDeck, tmSettings) : {};
 
+      var firstP = tmDeck[0];
+      state.selectedSlotIdx = null;
       state.twoMinds = {
         roundIndex: 0,
         totalRounds: tmDeck.length,
@@ -1095,32 +1094,26 @@
         comboStreak: 0,
         maxCombo: 0,
         wordsSolved: 0,
-        hintsUsed: 0,
-        perfectRounds: 0,
-        askTokensRemaining: 3,
-        solveTimes: [],
         isSolved: false,
         isTransitioning: false,
         isSolo: false,
-        wordLength: tmDeck[0].length,
-        myCategory: tmDeck[0].category,
-        myClue: tmDeck[0].clueA,
-        prompt: tmDeck[0].prompt,
+        wordLength: firstP ? firstP.length : 5,
+        category: firstP ? firstP.category : 'General',
+        clueA: firstP ? firstP.clueA : '',
+        clueB: firstP ? firstP.clueB : '',
+        prompt: firstP ? firstP.prompt : '',
+        slotOwners: firstP ? firstP.slotOwners : [],
         slots: (function () {
           var arr = [];
-          for (var i = 0; i < tmDeck[0].length; i++) arr.push(null);
+          for (var i = 0; i < (firstP ? firstP.length : 5); i++) arr.push(null);
           return arr;
         })(),
-        myRack: tmDeck[0].playerA.map(function (ltr, idx) {
+        myRack: (firstP ? firstP.playerA : []).map(function (ltr, idx) {
           return { id: 'A_' + idx + '_' + Date.now(), letter: ltr, placed: false };
         }),
         deck: tmDeck
       };
 
-      state.twoMindsChat = [
-        { text: '🧩 Two Minds Match Shuru! Ek doosre se coordinate karein.', type: 'system' }
-      ];
-      state.partnerBubble = null;
       state.screen = 'twominds';
 
       Net.send('TM_START_MATCH', {
@@ -1128,11 +1121,13 @@
         totalRounds: tmDeck.length,
         roundDuration: tmSettings.duration || 45,
         roundEndAt: tmMatch.roundEndAt,
-        wordLength: tmDeck[0].length,
-        category: tmDeck[0].category,
-        guestLetters: tmDeck[0].playerB,
-        guestClue: tmDeck[0].clueB,
-        prompt: tmDeck[0].prompt,
+        wordLength: firstP ? firstP.length : 5,
+        category: firstP ? firstP.category : 'General',
+        guestLetters: firstP ? firstP.playerB : [],
+        clueA: firstP ? firstP.clueA : '',
+        clueB: firstP ? firstP.clueB : '',
+        prompt: firstP ? firstP.prompt : '',
+        slotOwners: firstP ? firstP.slotOwners : [],
         teamScore: 0,
         combo: 0,
         wordsSolved: 0
@@ -1381,14 +1376,42 @@
       var rackTile = state.twoMinds.myRack.find(function (t) { return t.id === tileId; });
       if (!rackTile || rackTile.placed) return;
 
-      var emptyIdx = state.twoMinds.slots.indexOf(null);
-      if (emptyIdx === -1) {
+      var isHost = Net.isHostUser();
+      var myRole = isHost ? 'host' : 'guest';
+      var slotOwners = state.twoMinds.slotOwners || [];
+      var slots = state.twoMinds.slots;
+
+      // 1. If user tapped a specific empty slot, place there
+      var targetIdx = -1;
+      if (state.selectedSlotIdx !== null && state.selectedSlotIdx !== undefined) {
+        var sIndex = state.selectedSlotIdx;
+        if (!slots[sIndex]) {
+          targetIdx = sIndex;
+        }
+      }
+
+      // 2. Otherwise find player's first empty assigned slot
+      if (targetIdx === -1) {
+        for (var i = 0; i < slots.length; i++) {
+          if (!slots[i] && (slotOwners[i] === myRole || state.twoMinds.isSolo)) {
+            targetIdx = i;
+            break;
+          }
+        }
+      }
+
+      // 3. Fallback: any empty slot
+      if (targetIdx === -1) {
+        targetIdx = slots.indexOf(null);
+      }
+
+      if (targetIdx === -1) {
         toast('Saare slots bhare hain! Letter hatane ke liye slot par tap karein.');
         return;
       }
 
-      var isHost = Net.isHostUser();
-      state.twoMinds.slots[emptyIdx] = {
+      state.selectedSlotIdx = null; // Clear selection after placement
+      state.twoMinds.slots[targetIdx] = {
         letter: tileLtr,
         owner: isHost ? 'host' : 'guest',
         id: tileId
@@ -1405,38 +1428,43 @@
       var sIdx = +target.dataset.idx;
       if (!state.twoMinds || state.twoMinds.isSolved || state.twoMinds.isTransitioning) return;
       var currentSlot = state.twoMinds.slots[sIdx];
-      if (!currentSlot) return;
-
       var isHost = Net.isHostUser();
-      var isMyLetter = (currentSlot.owner === 'host' && isHost) ||
-                       (currentSlot.owner === 'guest' && !isHost) ||
-                       state.twoMinds.isSolo;
+      var myRole = isHost ? 'host' : 'guest';
 
-      if (currentSlot.locked) {
-        toast('Ye hint se unlock hua letter hai!');
-        return;
+      if (currentSlot) {
+        // Filled slot — remove if it's placed by this player
+        var isMyLetter = (currentSlot.owner === myRole) || state.twoMinds.isSolo;
+        if (currentSlot.locked) {
+          toast('Ye hint se unlock hua letter hai!');
+          return;
+        }
+        if (!isMyLetter) {
+          toast('Ye letter partner ne rakha hai!');
+          return;
+        }
+
+        state.twoMinds.slots[sIdx] = null;
+        var myRackTile = state.twoMinds.myRack.find(function (t) { return t.id === currentSlot.id; });
+        if (myRackTile) myRackTile.placed = false;
+
+        if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
+        Audio.playTap();
+        if (Net.getStatus() === 'connected') {
+          Net.send('TM_BOARD_UPDATE', { slots: state.twoMinds.slots });
+        }
+        render();
+      } else {
+        // Empty slot — toggle selection highlight!
+        Audio.playTap();
+        state.selectedSlotIdx = (state.selectedSlotIdx === sIdx ? null : sIdx);
+        render();
       }
-
-      if (!isMyLetter) {
-        toast('Ye letter partner ne rakha hai!');
-        return;
-      }
-
-      state.twoMinds.slots[sIdx] = null;
-      var myRackTile = state.twoMinds.myRack.find(function (t) { return t.id === currentSlot.id; });
-      if (myRackTile) myRackTile.placed = false;
-
-      if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
-      Audio.playTap();
-      if (Net.getStatus() === 'connected') {
-        Net.send('TM_BOARD_UPDATE', { slots: state.twoMinds.slots });
-      }
-      render();
     } else if (action === 'tmRecall') {
       Audio.playTap();
       if (!state.twoMinds) return;
       var isH = Net.isHostUser();
       var myOwner = isH ? 'host' : 'guest';
+      state.selectedSlotIdx = null;
       state.twoMinds.slots = state.twoMinds.slots.map(function (s) {
         if (s && (s.owner === myOwner || state.twoMinds.isSolo) && !s.locked) {
           return null;
@@ -1462,7 +1490,12 @@
       if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
       var res = TwoMinds ? TwoMinds.verifyWord(state.twoMinds.slots) : { isCorrect: false };
       if (res.isIncomplete) {
-        toast('Pehle saare akshar bharein!');
+        toast('Pehle saare akshar bharein! (' + (res.missingCount || 'kuch') + ' baaki hain)');
+        var bElIncomplete = document.querySelector('.tm-board-slots');
+        if (bElIncomplete) {
+          bElIncomplete.classList.add('shake');
+          setTimeout(function () { bElIncomplete.classList.remove('shake'); }, 400);
+        }
         return;
       }
 
@@ -1495,10 +1528,10 @@
           if (TwoMindsUI && TwoMindsUI.advanceRoundAuthoritative) {
             TwoMindsUI.advanceRoundAuthoritative();
           }
-        }, 2600);
+        }, 2200);
       } else {
         Audio.playMiss();
-        toast('Not quite! Keep working together.');
+        toast('Sahi nahi hai! Akshar dobara check karein.');
         var bEl = document.querySelector('.tm-board-slots');
         if (bEl) {
           bEl.classList.add('shake');
@@ -1512,128 +1545,34 @@
         }
         render();
       }
-    } else if (action === 'tmAskHelp') {
+    } else if (action === 'tmAiPlaceNow') {
       Audio.playTap();
-      if (!state.twoMinds) return;
-      if (state.twoMinds.askTokensRemaining <= 0) {
-        toast('Saare Ask Partner tokens use ho chuke hain!');
-        return;
+      if (!state.twoMinds || !state.twoMinds.isSolo) return;
+      if (TwoMinds && TwoMinds.placeAIPartnerNow) {
+        TwoMinds.placeAIPartnerNow(function (evt) {
+          state.twoMinds.slots = evt.slots;
+          toast('🤖 AI Partner ne apne akshar rakh diye!');
+          render();
+        });
       }
-      state.twoMinds.askTokensRemaining--;
-      if (state.twoMinds.isSolo) {
-        var curPuzzle = state.twoMinds.deck[state.twoMinds.roundIndex];
-        var guestLtrs = curPuzzle.playerB || [];
-        var cleanAns = curPuzzle.answer.replace(/\s/g, '');
-        var unshared = null;
-        var unsharedIdx = -1;
-        for (var gl = 0; gl < guestLtrs.length; gl++) {
-          var char = guestLtrs[gl];
-          for (var ca = 0; ca < cleanAns.length; ca++) {
-            if (cleanAns[ca] === char && !state.twoMinds.slots[ca]) {
-              unshared = char;
-              unsharedIdx = ca;
-              break;
-            }
-          }
-          if (unshared) break;
-        }
-
-        if (unshared && unsharedIdx !== -1) {
-          state.twoMinds.slots[unsharedIdx] = {
-            letter: unshared,
-            owner: 'guest',
-            id: 'guest_help_' + Date.now()
-          };
-          if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
-          state.twoMindsChat.push({
-            text: '🤖 AI Partner: Maine akshar "' + unshared + '" slot ' + (unsharedIdx + 1) + ' me rakh diya! 💖',
-            type: 'partner'
-          });
-          if (TwoMindsUI && TwoMindsUI.showPartnerSpeechBubble) {
-            TwoMindsUI.showPartnerSpeechBubble('Maine "' + unshared + '" rakh diya! 💖', 'AI Partner');
-          }
-          toast('Madad mil gayi! Akshar "' + unshared + '" board par lag gaya.');
-        } else {
-          toast('AI Partner ke paas aur letters nahi hain!');
-        }
-        render();
-      } else {
-        if (Net.getStatus() === 'connected') {
-          Net.send('TM_ASK_HELP', { requester: profile.name });
-          toast('Partner se madad maangi gayi! 🤝');
-        }
-      }
-    } else if (action === 'tmSharePartnerLetter') {
-      Audio.playTap();
-      state.sharePartnerPrompt = false;
-      var unplaced = state.twoMinds.myRack.find(function (t) { return !t.placed; });
-      if (!unplaced && state.twoMinds.myRack.length) unplaced = state.twoMinds.myRack[0];
-      if (unplaced) {
-        if (Net.getStatus() === 'connected') {
-          Net.send('TM_GIVE_HELP', { sharedLetter: unplaced.letter, helper: profile.name });
-        }
-        toast('Aapne partner ko akshar "' + unplaced.letter + '" reveal kiya! ✨');
-      }
-      render();
     } else if (action === 'tmUseHint') {
       Audio.playTap();
-      if (!state.twoMinds) return;
-      var curP = state.twoMinds.deck ? state.twoMinds.deck[state.twoMinds.roundIndex] : null;
-      var cleanA = curP ? curP.answer.replace(/\s/g, '') : 'WORD';
-      var firstLtr = cleanA.charAt(0);
-
-      state.twoMinds.hintsUsed = (state.twoMinds.hintsUsed || 0) + 1;
-      state.twoMinds.teamScore = Math.max(0, (state.twoMinds.teamScore || 0) - 20);
-      state.twoMinds.slots[0] = {
-        letter: firstLtr,
-        owner: 'system',
-        locked: true,
-        id: 'hint_0'
-      };
-
-      if (TwoMinds) TwoMinds.setSlots(state.twoMinds.slots);
-      state.twoMindsChat.push({
-        text: '💡 Hint Reveal: Pehla akshar "' + firstLtr + '" unlock ho gaya! (-20 pts)',
-        type: 'system'
-      });
-      Audio.playUnlock();
-      toast('💡 Pehla akshar "' + firstLtr + '" unlock ho gaya!');
-
-      if (Net.getStatus() === 'connected') {
-        Net.send('TM_USE_HINT', {
-          hintType: 'first_letter',
-          letter: firstLtr,
-          hintDesc: 'Pehla akshar "' + firstLtr + '" unlock hua'
-        });
-        Net.send('TM_BOARD_UPDATE', { slots: state.twoMinds.slots });
-      }
-      render();
-    } else if (action === 'tmQuickChip') {
-      Audio.playTap();
-      var qText = target.dataset.text;
-      if (!qText) return;
-      state.twoMindsChat.push({
-        text: qText,
-        sender: profile.name,
-        type: 'me'
-      });
-      if (TwoMindsUI && TwoMindsUI.showPartnerSpeechBubble) {
-        TwoMindsUI.showPartnerSpeechBubble(qText, profile.name);
-      }
-      if (Net.getStatus() === 'connected') {
-        Net.send('TM_QUICK_MSG', { text: qText, sender: profile.name });
-      } else if (state.twoMinds && state.twoMinds.isSolo) {
-        setTimeout(function () {
-          var aiResponses = ['Haan sun raha hoon! 💖', 'Try kar raha hoon! ✨', 'Pakka! 🚀', 'Shabaash! ❤️'];
-          var rep = aiResponses[Math.floor(Math.random() * aiResponses.length)];
-          state.twoMindsChat.push({ text: rep, sender: 'AI Partner', type: 'partner' });
-          if (TwoMindsUI && TwoMindsUI.showPartnerSpeechBubble) {
-            TwoMindsUI.showPartnerSpeechBubble(rep, 'AI Partner');
+      if (!state.twoMinds || state.twoMinds.isSolved) return;
+      if (TwoMinds && TwoMinds.revealFirstLetter) {
+        var hRes = TwoMinds.revealFirstLetter();
+        if (hRes) {
+          state.twoMinds.slots = hRes.slots;
+          var myMatchTile = state.twoMinds.myRack.find(function (t) {
+            return t.letter === hRes.letter && !t.placed;
+          });
+          if (myMatchTile) myMatchTile.placed = true;
+          toast('💡 Pehla akshar "' + hRes.letter + '" unlock ho gaya!');
+          if (Net.getStatus() === 'connected') {
+            Net.send('TM_BOARD_UPDATE', { slots: state.twoMinds.slots });
           }
           render();
-        }, 1200);
+        }
       }
-      render();
     } else if (action === 'pickColor') {
       state.currentColor = target.dataset.color;
       Audio.playTap();

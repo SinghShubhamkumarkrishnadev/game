@@ -93,69 +93,54 @@
     return x - Math.floor(x);
   }
 
-  /* Strict Letter Partition Algorithm
+  /* Strict Letter Partition Algorithm with Deterministic Slot Ownership
    * Rule:
-   * 1. Player A must have at least 1 required letter.
-   * 2. Player B must have at least 1 required letter.
-   * 3. Neither player has all letters needed to solve alone.
-   * 4. Letters are balanced roughly 50/50.
+   * 1. Player A and Player B have designated alternating slots.
+   * 2. Neither player can solve the word without the other.
+   * 3. Both players know which slots belong to them on the board.
    */
-  function partitionWord(answer, isHard) {
+  function partitionWord(answer, isHard, roundIdx) {
     var clean = answer.toUpperCase().replace(/[^A-Z]/g, '');
     var letters = clean.split('');
     var n = letters.length;
 
-    // Shuffle indices
-    var indices = [];
-    for (var i = 0; i < n; i++) indices.push(i);
-    for (var j = indices.length - 1; j > 0; j--) {
-      var k = Math.floor(Math.random() * (j + 1));
-      var temp = indices[j];
-      indices[j] = indices[k];
-      indices[k] = temp;
-    }
-
-    // Split roughly half
-    var half = Math.floor(n / 2);
-    if (half < 1) half = 1;
-    if (half >= n) half = n - 1;
-
+    var slotOwners = [];
     var aLetters = [];
     var bLetters = [];
 
-    for (var idx = 0; idx < n; idx++) {
-      if (idx < half) {
-        aLetters.push(letters[indices[idx]]);
+    // Alternating slots: Host gets even slots (0, 2, 4...) and Guest gets odd slots (1, 3, 5...)
+    // Flips starting player on alternate rounds for fairness
+    var flipStarter = (roundIdx && roundIdx % 2 === 1);
+
+    for (var i = 0; i < n; i++) {
+      var isHost = flipStarter ? (i % 2 === 1) : (i % 2 === 0);
+      var owner = isHost ? 'host' : 'guest';
+      slotOwners.push(owner);
+
+      if (isHost) {
+        aLetters.push(letters[i]);
       } else {
-        bLetters.push(letters[indices[idx]]);
+        bLetters.push(letters[i]);
       }
     }
 
-    // Validation: Guarantee both have letters and neither has complete word
-    if (aLetters.length === 0) {
+    // Safety fallback: ensure both players have at least one letter
+    if (aLetters.length === 0 && bLetters.length > 1) {
       aLetters.push(bLetters.pop());
-    } else if (bLetters.length === 0) {
+      slotOwners[slotOwners.length - 1] = 'host';
+    } else if (bLetters.length === 0 && aLetters.length > 1) {
       bLetters.push(aLetters.pop());
+      slotOwners[slotOwners.length - 1] = 'guest';
     }
 
-    // Shuffle each rack for display
-    aLetters.sort(function () { return 0.5 - Math.random(); });
-    bLetters.sort(function () { return 0.5 - Math.random(); });
-
-    // Optional decoy letters in Hard Mode
-    if (isHard) {
-      var DECOY_POOL = ['X', 'J', 'Q', 'Z', 'K', 'V', 'B', 'P', 'Y'];
-      var decoyA = DECOY_POOL[Math.floor(Math.random() * DECOY_POOL.length)];
-      var decoyB = DECOY_POOL[Math.floor(Math.random() * DECOY_POOL.length)];
-      if (aLetters.indexOf(decoyA) === -1) aLetters.push(decoyA);
-      if (bLetters.indexOf(decoyB) === -1) bLetters.push(decoyB);
-      aLetters.sort(function () { return 0.5 - Math.random(); });
-      bLetters.sort(function () { return 0.5 - Math.random(); });
-    }
+    // Shuffle rack order so it remains an engaging anagram to solve
+    var shuffledA = aLetters.slice().sort(function () { return 0.5 - Math.random(); });
+    var shuffledB = bLetters.slice().sort(function () { return 0.5 - Math.random(); });
 
     return {
-      playerA: aLetters,
-      playerB: bLetters
+      playerA: shuffledA,
+      playerB: shuffledB,
+      slotOwners: slotOwners
     };
   }
 
@@ -167,10 +152,9 @@
 
     if (isDaily) {
       var seed = getDailySeed();
-      // Select 1 special deterministic daily puzzle
       var idx = Math.floor(seededRandom(seed) * list.length);
       var item = list[idx];
-      var part = partitionWord(item.answer, isHard);
+      var part = partitionWord(item.answer, isHard, 0);
       return [{
         answer: item.answer,
         category: item.category,
@@ -178,6 +162,7 @@
         clueA: item.clueA,
         clueB: item.clueB,
         prompt: item.prompt,
+        slotOwners: part.slotOwners,
         playerA: part.playerA,
         playerB: part.playerB,
         isDaily: true
@@ -193,17 +178,18 @@
     }
 
     var selected = list.slice(0, Math.min(count || 10, list.length));
-    return selected.map(function (item) {
-      var part = partitionWord(item.answer, isHard);
+    return selected.map(function (pItem, rIdx) {
+      var pPart = partitionWord(pItem.answer, isHard, rIdx);
       return {
-        answer: item.answer,
-        category: item.category,
-        length: item.length,
-        clueA: item.clueA,
-        clueB: item.clueB,
-        prompt: item.prompt,
-        playerA: part.playerA,
-        playerB: part.playerB
+        answer: pItem.answer,
+        category: pItem.category,
+        length: pItem.length,
+        clueA: pItem.clueA,
+        clueB: pItem.clueB,
+        prompt: pItem.prompt,
+        slotOwners: pPart.slotOwners,
+        playerA: pPart.playerA,
+        playerB: pPart.playerB
       };
     });
   }
@@ -310,53 +296,68 @@
     if (!currentMatch || !currentMatch.isSolo) return;
     stopSoloAILoop();
 
-    currentMatch.soloAIInterval = setInterval(function () {
-      if (!currentMatch || currentMatch.isSolved || currentMatch.isTransitioning) return;
-      var curPuzzle = currentMatch.deck[currentMatch.roundIndex];
-      if (!curPuzzle) return;
+    // AI automatically places its designated letters after 1.2 seconds
+    currentMatch.soloAIInterval = setTimeout(function () {
+      placeAIPartnerNow(onUpdate);
+    }, 1200);
+  }
 
-      var guestLetters = curPuzzle.playerB || [];
-      var cleanAnswer = curPuzzle.answer.replace(/\s/g, '');
+  function placeAIPartnerNow(onUpdate) {
+    if (!currentMatch) return;
+    var curPuzzle = currentMatch.deck[currentMatch.roundIndex];
+    if (!curPuzzle) return;
 
-      // Find an unplaced guest letter
-      for (var i = 0; i < guestLetters.length; i++) {
-        var ltr = guestLetters[i];
-        var placedCount = currentMatch.slots.filter(function (s) {
-          return s && s.letter === ltr && s.owner === 'guest';
-        }).length;
-        var totalInGuest = guestLetters.filter(function (l) { return l === ltr; }).length;
+    var cleanAnswer = curPuzzle.answer.toUpperCase().replace(/\s/g, '');
+    var slotOwners = curPuzzle.slotOwners || [];
 
-        if (placedCount < totalInGuest) {
-          // Find the matching slot in cleanAnswer
-          for (var sIdx = 0; sIdx < cleanAnswer.length; sIdx++) {
-            if (cleanAnswer[sIdx] === ltr && !currentMatch.slots[sIdx]) {
-              currentMatch.slots[sIdx] = {
-                letter: ltr,
-                owner: 'guest',
-                id: 'guest_' + i + '_' + Date.now()
-              };
-              if (onUpdate) {
-                onUpdate({
-                  type: 'ai_letter_placed',
-                  letter: ltr,
-                  slotIndex: sIdx,
-                  slots: currentMatch.slots
-                });
-              }
-              return;
-            }
-          }
-        }
+    // Fill all slots belonging to guest (AI)
+    for (var sIdx = 0; sIdx < cleanAnswer.length; sIdx++) {
+      if (slotOwners[sIdx] === 'guest' && !currentMatch.slots[sIdx]) {
+        currentMatch.slots[sIdx] = {
+          letter: cleanAnswer[sIdx],
+          owner: 'guest',
+          id: 'guest_' + sIdx + '_' + Date.now()
+        };
       }
-    }, 4500);
+    }
+
+    if (onUpdate) {
+      onUpdate({
+        type: 'ai_letter_placed',
+        slots: currentMatch.slots
+      });
+    }
   }
 
   function stopSoloAILoop() {
     if (currentMatch && currentMatch.soloAIInterval) {
-      clearInterval(currentMatch.soloAIInterval);
       clearTimeout(currentMatch.soloAIInterval);
+      clearInterval(currentMatch.soloAIInterval);
       currentMatch.soloAIInterval = null;
     }
+  }
+
+  /* Reveal First Letter Hint */
+  function revealFirstLetter() {
+    if (!currentMatch) return null;
+    var puzzle = currentMatch.deck[currentMatch.roundIndex];
+    if (!puzzle) return null;
+    var clean = puzzle.answer.toUpperCase().replace(/\s/g, '');
+    var firstLtr = clean[0];
+    var owner = (puzzle.slotOwners && puzzle.slotOwners[0]) || 'host';
+
+    currentMatch.slots[0] = {
+      letter: firstLtr,
+      owner: owner,
+      id: 'hint_0',
+      locked: true
+    };
+    currentMatch.hintsActive.firstLetter = true;
+    return {
+      letter: firstLtr,
+      owner: owner,
+      slots: currentMatch.slots
+    };
   }
 
   /* Check Solution Logic */
@@ -372,7 +373,13 @@
     var assembled = slotsToUse.map(function (s) { return s ? s.letter : ''; }).join('');
 
     if (assembled.length < target.length) {
-      return { isCorrect: false, isIncomplete: true, message: 'Pehle saare akshar bharein!' };
+      var missing = target.length - assembled.length;
+      return {
+        isCorrect: false,
+        isIncomplete: true,
+        missingCount: missing,
+        message: 'Pehle saare akshar bharein! (' + missing + ' baaki hain)'
+      };
     }
 
     currentMatch.attemptCount++;
@@ -451,6 +458,8 @@
     verifyWord: verifyWord,
     startSoloAILoop: startSoloAILoop,
     stopSoloAILoop: stopSoloAILoop,
+    placeAIPartnerNow: placeAIPartnerNow,
+    revealFirstLetter: revealFirstLetter,
     cleanup: function () {
       stopSoloAILoop();
       currentMatch = null;

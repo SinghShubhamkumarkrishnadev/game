@@ -79,28 +79,28 @@
       if (tab === 'twominds') {
         contentHtml = '<div class="guide-step-card">' +
           '<span class="guide-num">1</span>' +
-          '<div><div class="guide-step-title">Do Dil, Alag Jankari (USP)</div>' +
-          '<div class="guide-step-desc">Player A ko category aur pehli aadhi clues milti hain. Player B ko word length aur doosri aadhi clues milti hain! Akele koi solve nahi kar sakta.</div></div>' +
+          '<div><div class="guide-step-title">Dono Clues Saath Mein Dekhein</div>' +
+          '<div class="guide-step-desc">Dono partners ko Category, Romantic Prompt, aur <b>Clue 1 + Clue 2</b> dono dikhte hain taaki milkar word guess karna aasan aur mazedaar ho!</div></div>' +
           '</div>' +
           '<div class="guide-step-card">' +
           '<span class="guide-num">2</span>' +
-          '<div><div class="guide-step-title">Chat &amp; 1-Tap Quick Messages</div>' +
-          '<div class="guide-step-desc">"I have this letter", "Try my letter", ya in-game chat se apne clues ek doosre ko batayein aur word milkar guess karein.</div></div>' +
+          '<div><div class="guide-step-title">Assigned Slots (Zero Confusion)</div>' +
+          '<div class="guide-step-desc">Board ke har slot par <b>[Aap]</b> ya <b>[Partner]</b> ka saaf tag hai. Kaun pehle likhe kaun baad — koi ladai nahi! Har partner apne designated slots fill karta hai.</div></div>' +
           '</div>' +
           '<div class="guide-step-card">' +
           '<span class="guide-num">3</span>' +
-          '<div><div class="guide-step-title">Shared Board Par Letters Rakhein</div>' +
-          '<div class="guide-step-desc">Apne rack ke letters par tap karke shared slots me rakhein. Player A ke letters pink aur Player B ke teal me aate hain!</div></div>' +
+          '<div><div class="guide-step-title">Tap Se Place &amp; Tap Se Recall</div>' +
+          '<div class="guide-step-desc">Apne rack ke letter par tap karke slot me lagayein. Agar galti se galat slot me chala gaya, to board ke letter par tap karke use wapas rack me le aaein!</div></div>' +
           '</div>' +
           '<div class="guide-step-card">' +
           '<span class="guide-num">4</span>' +
-          '<div><div class="guide-step-title">Ask Partner &amp; Hints</div>' +
-          '<div class="guide-step-desc">Agar phans jao to 3 <b>"Ask Partner"</b> tokens se partner se letter maangein ya <b>"Hint"</b> se pehla akshar unlock karein.</div></div>' +
+          '<div><div class="guide-step-title">Live Partner Status &amp; AI Partner</div>' +
+          '<div class="guide-step-desc">Partner ne kitne letters lagaye (jaise 2/3), live strip me dikhta hai. Solo mode me <b>"🤖 AI Akshar Rakho"</b> dabakar AI partner se instant madad lein.</div></div>' +
           '</div>' +
           '<div class="guide-step-card" style="border-color:var(--genda);background:#FFF9EB">' +
           '<span class="guide-num" style="background:var(--genda);color:#000">🔥</span>' +
           '<div><div class="guide-step-title" style="color:#000">Team Score &amp; SYNC Combos</div>' +
-          '<div class="guide-step-desc" style="color:#2A1240">Lagaatar sahi solve karne par <b class="guide-highlight">🔥 2X, 3X TEAM SYNC</b> multiplier milta hai! Koi single winner nahi — Jodi hi ek team hai!</div></div>' +
+          '<div class="guide-step-desc" style="color:#2A1240">Poora word bharne par <b>"Word Check Karein ✨"</b> dabayein! Lagaatar sahi hone par <b class="guide-highlight">🔥 2X, 3X TEAM SYNC</b> multiplier milta hai!</div></div>' +
           '</div>';
       } else if (tab === 'scribble') {
         contentHtml = '<div class="guide-step-card">' +
@@ -144,6 +144,23 @@
           '<div><div class="guide-step-title">3 Laps &amp; Podium Finish</div>' +
           '<div class="guide-step-desc">3 Laps complete karke sabse pehle finish arch cross karne wale ko <b class="guide-highlight">+100 PTS Finish Bonus</b> aur 🥇 Trophy milti hai!</div></div>' +
           '</div>';
+      } else if (tab === 'tictactoe') {
+        contentHtml = '<div class="guide-badge-box">⭕ <span><b>Dil Ki Baazi (Tic-Tac-Toe)</b> — Classic game ab dynamic win-line aur celebration ke saath!</span></div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">1</span>' +
+          '<div><div class="guide-step-title">X vs O — Bari-Bari Chalein</div>' +
+          '<div class="guide-step-desc">Host <b>X (Pink)</b> aur Guest <b>O (Teal)</b> hota hai. 3x3 board par apni chaal chalein.</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">2</span>' +
+          '<div><div class="guide-step-title">Animated Dynamic Win-Line</div>' +
+          '<div class="guide-step-desc">Jaise hi koi row, column ya diagonal me 3 symbols judte hain, ek smooth cut-through line visually win draw karti hai!</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">3</span>' +
+          '<div><div class="guide-step-title">Sprinkler Confetti &amp; Rematch</div>' +
+          '<div class="guide-step-desc">Jeetne par screen par vibrant sprinkler confetti blast hoti hai aur detailed winner modal aata hai jahan se Retry ya Exit kar sakte hain.</div></div>' +
+          '</div>';
       } else if (tab === 'install') {
         contentHtml = '<div class="guide-badge-box">📲 <span>Ye game ek <b>Progressive Web App (PWA)</b> hai — bina App Store ke direct install hota hai!</span></div>' +
           '<div class="guide-step-card">' +
@@ -172,6 +189,7 @@
         '<button type="button" class="guide-tab-btn ' + (tab === 'twominds' ? 'active' : '') + '" data-action="setGuideTab" data-tab="twominds">🧩 Two Minds</button>' +
         '<button type="button" class="guide-tab-btn ' + (tab === 'scribble' ? 'active' : '') + '" data-action="setGuideTab" data-tab="scribble">🎨 Scribble</button>' +
         '<button type="button" class="guide-tab-btn ' + (tab === 'race' ? 'active' : '') + '" data-action="setGuideTab" data-tab="race">🏍️ 3D Race</button>' +
+        '<button type="button" class="guide-tab-btn ' + (tab === 'tictactoe' ? 'active' : '') + '" data-action="setGuideTab" data-tab="tictactoe">⭕ Tic-Tac-Toe</button>' +
         '<button type="button" class="guide-tab-btn ' + (tab === 'install' ? 'active' : '') + '" data-action="setGuideTab" data-tab="install">📲 Install</button>' +
         '</div>' +
         '<div class="guide-content-scroll">' + contentHtml + '</div>' +
