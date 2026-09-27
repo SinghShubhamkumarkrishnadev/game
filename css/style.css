@@ -270,6 +270,133 @@ html, body {
   100% { transform: scale(0.9); opacity: 0.8; }
 }
 
+/* Enhanced Network Status Indicators */
+.live-pill.warning {
+  background: #FFF9EB;
+  color: var(--plum);
+  border-color: var(--genda);
+}
+
+.live-pill.reconnecting {
+  background: #FFF2DC;
+  color: #8C4B00;
+  border-color: var(--genda);
+  animation: reconnectPillGlow 1.8s infinite ease-in-out;
+}
+
+.live-pill.error {
+  background: var(--bad-soft);
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+.dot-pulse.warning {
+  background: var(--genda);
+  box-shadow: 0 0 6px var(--genda);
+}
+
+.dot-pulse.error {
+  background: var(--bad);
+  box-shadow: 0 0 6px var(--bad);
+}
+
+@keyframes reconnectPillGlow {
+  0%, 100% { border-color: var(--genda); }
+  50% { border-color: var(--kesar); }
+}
+
+/* Network Auto-Reconnection & Health Floating Banner */
+.net-status-banner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--plum);
+  color: var(--on-plum);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 3px 0 var(--stroke);
+  border-bottom: 2px solid var(--stroke);
+  animation: netBannerSlideDown 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.net-status-banner.warning {
+  background: #FFEFC7;
+  color: #4A2E00;
+  border-bottom-color: var(--genda);
+}
+
+.net-status-banner.success {
+  background: #D1F2DF;
+  color: #0A4A28;
+  border-bottom-color: var(--good);
+}
+
+.net-status-banner.error {
+  background: #FFDADA;
+  color: #5C1414;
+  border-bottom-color: var(--bad);
+}
+
+.net-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.net-banner-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.net-banner-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.net-banner-retry {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--stroke);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 1.5px 0 var(--stroke);
+  transition: transform 0.1s ease;
+  white-space: nowrap;
+}
+
+.net-banner-retry:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+@keyframes netBannerSlideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 /* Avatar Selector */
 .avatar-row {
   display: flex;

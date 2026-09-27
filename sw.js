@@ -1,5 +1,5 @@
 /* Jodi Sync Service Worker - Offline, PWA Caching & Instant Auto-Update */
-const CACHE_NAME = 'jodi-v4.9-rps-battle';
+const CACHE_NAME = 'jodi-v5.0-robust-net';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

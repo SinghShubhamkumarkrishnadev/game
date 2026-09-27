@@ -165,14 +165,163 @@
   if (ReactionUI && ReactionUI.init) ReactionUI.init(appContext);
   if (RPSUI && RPSUI.init) RPSUI.init(appContext);
 
+  /* Network Health & Reconnection Banner Controller */
+  function updateNetBanner(mode, html, autoHideMs) {
+    var banner = $('#netStatusBanner');
+    if (!banner) return;
+    if (!mode) {
+      banner.style.display = 'none';
+      banner.className = 'net-status-banner';
+      banner.innerHTML = '';
+      return;
+    }
+    banner.className = 'net-status-banner ' + mode;
+    banner.innerHTML = html;
+    banner.style.display = 'flex';
+
+    if (autoHideMs) {
+      setTimeout(function () {
+        if (banner && banner.classList.contains(mode)) {
+          banner.style.display = 'none';
+        }
+      }, autoHideMs);
+    }
+  }
+
+  /* Game State Synchronization Provider & Consumer */
+  Net.registerStateProvider(function () {
+    return {
+      screen: state.screen,
+      selectedGameMode: state.selectedGameMode,
+      matchSettings: state.matchSettings,
+      twoMindsSettings: state.twoMindsSettings,
+      reactionSettings: state.reactionSettings,
+      rpsSettings: state.rpsSettings,
+      selectedBikeTheme: state.selectedBikeTheme,
+      partnerBikeTheme: state.partnerBikeTheme,
+      raceTrackSeed: state.raceTrackSeed,
+      // Scribble State
+      game: state.game ? {
+        deck: state.game.deck,
+        turnIndex: state.game.turnIndex,
+        totalTurns: state.game.totalTurns,
+        dur: state.game.dur,
+        endAt: state.game.endAt,
+        scores: state.game.scores,
+        revealedIndices: state.game.revealedIndices,
+        solved: state.game.solved
+      } : null,
+      strokes: state.strokes ? state.strokes.slice(-250) : [],
+      // Two Minds State
+      twoMinds: state.twoMinds ? {
+        roundIndex: state.twoMinds.roundIndex,
+        totalRounds: state.twoMinds.totalRounds,
+        roundDuration: state.twoMinds.roundDuration,
+        roundEndAt: state.twoMinds.roundEndAt,
+        teamScore: state.twoMinds.teamScore,
+        comboStreak: state.twoMinds.comboStreak,
+        wordsSolved: state.twoMinds.wordsSolved,
+        wordLength: state.twoMinds.wordLength,
+        category: state.twoMinds.category,
+        clueA: state.twoMinds.clueA,
+        clueB: state.twoMinds.clueB,
+        prompt: state.twoMinds.prompt,
+        slotOwners: state.twoMinds.slotOwners,
+        slots: state.twoMinds.slots,
+        isSolved: state.twoMinds.isSolved
+      } : null,
+      // Tic Tac Toe State
+      ttt: state.ttt ? {
+        board: state.ttt.board,
+        turn: state.ttt.turn,
+        scores: state.ttt.scores,
+        roundCount: state.ttt.roundCount,
+        hostSymbol: state.ttt.hostSymbol,
+        guestSymbol: state.ttt.guestSymbol
+      } : null,
+      // Reaction Game State
+      reactionGame: state.reactionGame ? {
+        state: state.reactionGame.state,
+        p1Score: state.reactionGame.p1Score,
+        p2Score: state.reactionGame.p2Score,
+        duration: state.reactionGame.duration,
+        hardMode: state.reactionGame.hardMode
+      } : null,
+      // RPS Game State
+      rpsGame: state.rpsGame ? {
+        state: state.rpsGame.state,
+        targetWins: state.rpsGame.targetWins,
+        p1Wins: (state.rpsGame.p1 && state.rpsGame.p1.wins) || 0,
+        p2Wins: (state.rpsGame.p2 && state.rpsGame.p2.wins) || 0,
+        roundNumber: state.rpsGame.roundNumber
+      } : null
+    };
+  });
+
+  Net.registerStateConsumer(function (snapshot) {
+    if (!snapshot) return;
+    console.log('[App] Applying state sync for screen:', snapshot.screen);
+    if (snapshot.selectedGameMode) state.selectedGameMode = snapshot.selectedGameMode;
+    if (snapshot.matchSettings) state.matchSettings = snapshot.matchSettings;
+    if (snapshot.twoMindsSettings) state.twoMindsSettings = snapshot.twoMindsSettings;
+    if (snapshot.reactionSettings) state.reactionSettings = snapshot.reactionSettings;
+    if (snapshot.rpsSettings) state.rpsSettings = snapshot.rpsSettings;
+
+    if (snapshot.screen === 'twominds' && snapshot.twoMinds) {
+      state.screen = 'twominds';
+      if (!state.twoMinds) {
+        state.twoMinds = snapshot.twoMinds;
+        state.twoMinds.myRack = state.twoMinds.myRack || [];
+      } else {
+        state.twoMinds.roundIndex = snapshot.twoMinds.roundIndex;
+        state.twoMinds.teamScore = snapshot.twoMinds.teamScore;
+        state.twoMinds.comboStreak = snapshot.twoMinds.comboStreak;
+        state.twoMinds.slots = snapshot.twoMinds.slots;
+        state.twoMinds.category = snapshot.twoMinds.category;
+        state.twoMinds.clueA = snapshot.twoMinds.clueA;
+        state.twoMinds.clueB = snapshot.twoMinds.clueB;
+        state.twoMinds.prompt = snapshot.twoMinds.prompt;
+        state.twoMinds.isSolved = snapshot.twoMinds.isSolved;
+      }
+    } else if (snapshot.screen === 'game' && snapshot.game) {
+      state.screen = 'game';
+      state.game = snapshot.game;
+      if (snapshot.strokes && snapshot.strokes.length) {
+        state.strokes = snapshot.strokes;
+      }
+    } else if (snapshot.screen === 'ttt' && snapshot.ttt && state.ttt) {
+      state.screen = 'ttt';
+      state.ttt.board = snapshot.ttt.board;
+      state.ttt.turn = snapshot.ttt.turn;
+      state.ttt.scores = snapshot.ttt.scores;
+      state.ttt.roundCount = snapshot.ttt.roundCount;
+    } else if (snapshot.screen === 'reaction' && snapshot.reactionGame && state.reactionGame) {
+      state.screen = 'reaction';
+      state.reactionGame.p1Score = snapshot.reactionGame.p1Score;
+      state.reactionGame.p2Score = snapshot.reactionGame.p2Score;
+    } else if (snapshot.screen === 'rps' && snapshot.rpsGame && state.rpsGame) {
+      state.screen = 'rps';
+      if (state.rpsGame.p1) state.rpsGame.p1.wins = snapshot.rpsGame.p1Wins;
+      if (state.rpsGame.p2) state.rpsGame.p2.wins = snapshot.rpsGame.p2Wins;
+    } else if (snapshot.screen && snapshot.screen !== 'lobby' && snapshot.screen !== 'welcome') {
+      state.screen = snapshot.screen;
+    }
+    render();
+  });
+
   /* Network Event Handlers */
   Net.on('statusChange', function (status) {
     if (status === 'connected') {
-      state.screen = 'room_ready';
+      updateNetBanner(null);
+      var isPlaying = (state.screen === 'game' || state.screen === 'twominds' || state.screen === 'race' || state.screen === 'ttt' || state.screen === 'reaction' || state.screen === 'rps');
+      if (!isPlaying && state.screen !== 'welcome') {
+        state.screen = 'room_ready';
+      }
       Audio.playUnlock();
       burstCenter(24);
       toast('Partner jud gaye! 🟢 Dono sync hain');
     } else if (status === 'disconnected') {
+      updateNetBanner(null);
       if (state.screen !== 'welcome') {
         state.screen = 'lobby';
       }
@@ -180,8 +329,12 @@
     render();
   });
 
-  Net.on('connected', function () {
-    state.screen = 'room_ready';
+  Net.on('connected', function (info) {
+    updateNetBanner(null);
+    var isPlaying = (state.screen === 'game' || state.screen === 'twominds' || state.screen === 'race' || state.screen === 'ttt' || state.screen === 'reaction' || state.screen === 'rps');
+    if (!isPlaying && state.screen !== 'welcome') {
+      state.screen = 'room_ready';
+    }
     Audio.playUnlock();
     burstCenter(24);
     toast('Partner jud gaye! 🟢 Dono sync hain');
@@ -189,8 +342,60 @@
     render();
   });
 
+  Net.on('reconnecting', function (data) {
+    var sec = (data && data.secondsLeft) || 20;
+    var bannerHtml = '<div class="net-banner-content">' +
+      '<span class="net-banner-icon dot-pulse warning"></span>' +
+      '<span class="net-banner-text">Network reconnect ho raha hai... Sync check chal rahi hai (<b>' + sec + 's</b>)</span>' +
+      '</div>' +
+      '<button class="net-banner-retry" data-action="netManualRetry">Retry 🔄</button>';
+    updateNetBanner('warning', bannerHtml);
+  });
+
+  Net.on('reconnected', function (data) {
+    var pName = (data && data.partnerName) || Net.getPartnerName() || 'Partner';
+    var bannerHtml = '<div class="net-banner-content">' +
+      '<span class="net-banner-icon">🟢</span>' +
+      '<span class="net-banner-text">Sync wapas jud gaya! ' + esc(pName) + ' ke saath khelte rahein.</span>' +
+      '</div>';
+    updateNetBanner('success', bannerHtml, 2600);
+    Audio.playUnlock();
+    burstCenter(20);
+    toast('Partner sync ho gaye! 🟢 Khelte rahein');
+    render();
+  });
+
+  Net.on('networkSlow', function (data) {
+    var pillDot = $('#livePingDot') || $('#roomPingDot');
+    if (pillDot) pillDot.className = 'dot-pulse warning';
+  });
+
+  Net.on('online', function () {
+    toast('📶 Internet wapas jud gaya! Sync checking...');
+  });
+
+  Net.on('offline', function () {
+    var bannerHtml = '<div class="net-banner-content">' +
+      '<span class="net-banner-icon">⚠️</span>' +
+      '<span class="net-banner-text">Internet connection band hai. Check karein!</span>' +
+      '</div>';
+    updateNetBanner('error', bannerHtml);
+    toast('⚠️ Internet offline hai');
+  });
+
+  Net.on('error', function (err) {
+    console.warn('[AppNet] Peer error:', err);
+    if (!err) return;
+    if (err.type === 'peer-unavailable') {
+      toast('Room code sahi nahi hai ya host offline hain. Check karein!');
+    } else if (err.type === 'network' || err.type === 'socket-closed') {
+      toast('Network drop hua. Auto-reconnecting...');
+    }
+  });
+
   Net.on('PARTNER_LEFT_GAME', function (payload) {
     var pName = (payload && payload.by) || Net.getPartnerName() || 'Partner';
+    updateNetBanner(null);
     if (state.screen === 'game') {
       if (Scribble && Scribble.stopMatchTimer) Scribble.stopMatchTimer();
       Audio.playMiss();
@@ -216,6 +421,7 @@
   });
 
   Net.on('partnerDisconnected', function () {
+    updateNetBanner(null);
     if (state.screen === 'race') {
       toast('Partner connection lost ⚠️ AI autopilot chal raha hai! Race continue karein.');
       if (window.JodiRace && typeof window.JodiRace.setSoloAI === 'function') {
@@ -247,8 +453,19 @@
 
   Net.on('latencyUpdate', function (info) {
     var el = $('#livePing');
-    if (el) {
-      el.textContent = info.ms + 'ms';
+    if (el) el.textContent = info.ms + 'ms';
+    var dot = $('#roomPingDot') || $('#livePingDot');
+    if (dot) {
+      if (info.quality === 'good') {
+        dot.className = 'dot-pulse';
+        dot.style.background = 'var(--good)';
+      } else if (info.quality === 'fair') {
+        dot.className = 'dot-pulse warning';
+        dot.style.background = 'var(--genda)';
+      } else {
+        dot.className = 'dot-pulse error';
+        dot.style.background = 'var(--bad)';
+      }
     }
   });
 
@@ -1140,6 +1357,7 @@
         toast('Kripya Room Code daalein!');
         return;
       }
+      codeVal = Net.normalizeRoomCode(codeVal);
       state.modal = null;
       renderModal();
       Net.joinRoom(codeVal, profile.name, profile.avatar);
@@ -1930,6 +2148,12 @@
       state.game = null;
       state.screen = (Net.getStatus() === 'connected') ? 'room_ready' : 'lobby';
       render();
+    } else if (action === 'retryReconnectAfterPartnerLeft' || action === 'netManualRetry') {
+      Audio.playTap();
+      state.modal = null;
+      renderModal();
+      toast('Partner se reconnect kar rahe hain... ⏳');
+      Net.reconnect();
     } else if (action === 'continueSoloAfterPartnerLeft') {
       Audio.playTap();
       state.modal = null;

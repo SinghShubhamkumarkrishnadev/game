@@ -55,7 +55,8 @@
         'Shayad unka network toot gaya ya unhone game exit kar diya. Intezar karne ki zaroorat nahi hai!' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;gap:8px">' +
-        '<button type="button" class="btn primary" data-action="continueSoloAfterPartnerLeft">🎨 Solo Practice Khelte Raho</button>' +
+        '<button type="button" class="btn gold" data-action="retryReconnectAfterPartnerLeft">🔄 Dubara Judne Ki Koshish Karein</button>' +
+        '<button type="button" class="btn primary" data-action="continueSoloAfterPartnerLeft">🎨 Solo Khelte Raho</button>' +
         '<button type="button" class="btn alt" data-action="exitToLobbyAfterPartnerLeft">🏠 Main Lobby Me Jao</button>' +
         '<button type="button" class="btn ghost sm" data-action="createNewRoomAfterPartnerLeft">🔁 Naya Room Banao</button>' +
         '</div></div>';

@@ -62,9 +62,18 @@
     var Net = c.Net || global.JodiNet;
     var netStatus = Net ? Net.getStatus() : 'disconnected';
 
-    var statusBadge = netStatus === 'waiting'
-      ? '<span class="live-pill" style="background:#FFF9EB;color:var(--plum);border-color:var(--genda)"><span class="dot-pulse" style="background:var(--genda)"></span> Room Taiyar Hai</span>'
-      : '<span class="live-pill"><span class="dot-pulse"></span> Network Ready</span>';
+    var statusBadge = '';
+    if (netStatus === 'waiting') {
+      statusBadge = '<span class="live-pill warning"><span class="dot-pulse warning"></span> Room taiyar hai</span>';
+    } else if (netStatus === 'creating') {
+      statusBadge = '<span class="live-pill warning"><span class="dot-pulse warning"></span> Room ban raha hai...</span>';
+    } else if (netStatus === 'joining') {
+      statusBadge = '<span class="live-pill warning"><span class="dot-pulse warning"></span> Jud rahe hain...</span>';
+    } else if (netStatus === 'reconnecting') {
+      statusBadge = '<span class="live-pill reconnecting"><span class="dot-pulse warning"></span> Reconnecting...</span>';
+    } else {
+      statusBadge = '<span class="live-pill"><span class="dot-pulse"></span> Network ready</span>';
+    }
 
     var waitingCardHtml = '';
     if (netStatus === 'waiting') {
@@ -144,7 +153,7 @@
     return '<section class="screen">' +
       renderHeader() +
       '<div style="text-align:center;margin-bottom:10px">' +
-      '<span class="live-pill"><span class="dot-pulse"></span> Partner Connected • <span id="livePing">' + latency + 'ms</span></span>' +
+      '<span class="live-pill" id="roomPingPill"><span class="dot-pulse" id="roomPingDot"></span> Partner sync hain (<span id="livePing">' + latency + 'ms</span>)</span>' +
       '</div>' +
       '<div class="card elevated" style="text-align:center;padding:16px 14px">' +
       '<h2 style="font-family:var(--font-display);font-size:24px;color:var(--plum);margin-bottom:2px">Dono Sync Ho Gaye! 💞</h2>' +
