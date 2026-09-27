@@ -184,6 +184,11 @@
       '<div class="gm-title">X & O</div>' +
       '<div class="gm-desc">Tic-Tac-Toe</div>' +
       '</div>' +
+      '<div class="game-mode-tile ' + (mode === 'reaction' ? 'active' : '') + '" data-action="setMode" data-mode="reaction">' +
+      '<span class="gm-icon">⚡</span>' +
+      '<div class="gm-title">Reaction</div>' +
+      '<div class="gm-desc">Speed Duel</div>' +
+      '</div>' +
       '</div>' +
 
       // Mode-specific configuration
@@ -259,15 +264,32 @@
                 ? '<button class="btn gold" data-action="startRace">Race Shuru Karein 🏍️💨</button>'
                 : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host race shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
               )
-            : '<div class="settings-section" style="text-align:center">' +
-              '<div style="font-size:40px;margin-bottom:6px">⭕</div>' +
-              '<div style="font-family:var(--font-display);font-size:20px;color:var(--plum);margin-bottom:4px">X aur O — Tic-Tac-Toe</div>' +
-              '<p style="font-size:13px;color:var(--soft);margin-bottom:10px">Host → X (pehli chaal). Guest → O. Har round mein pehli chaal alternate hogi.</p>' +
-              '</div>' +
-              (isHost
-                ? '<button class="btn ttt-lobby-btn" data-action="startTTT">X &amp; O Shuru Karein ⭕✕</button>'
-                : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host game shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
-              )
+            : (mode === 'reaction'
+              ? '<div class="settings-section">' +
+                '<div class="settings-label"><span>⏱️ Match Duration</span><small>' + ((state.reactionSettings && state.reactionSettings.duration) || 15) + 's</small></div>' +
+                '<div class="segment-group">' +
+                '<button class="segment-btn gold ' + (!state.reactionSettings || state.reactionSettings.duration === 15 ? 'active' : '') + '" data-action="setReactionDuration" data-val="15">15s (Rapid ⚡)</button>' +
+                '<button class="segment-btn gold ' + (state.reactionSettings && state.reactionSettings.duration === 30 ? 'active' : '') + '" data-action="setReactionDuration" data-val="30">30s (Marathon ⏱️)</button>' +
+                '</div>' +
+                '<div class="settings-label"><span>⚠️ False Start Rule</span><small>' + (state.reactionSettings && state.reactionSettings.hardMode ? 'Hard (-1 Penalty)' : 'Standard (Opponent +1)') + '</small></div>' +
+                '<div class="segment-group">' +
+                '<button class="segment-btn teal ' + (!state.reactionSettings || !state.reactionSettings.hardMode ? 'active' : '') + '" data-action="setReactionHardMode" data-val="false">Standard (+1)</button>' +
+                '<button class="segment-btn teal ' + (state.reactionSettings && state.reactionSettings.hardMode ? 'active' : '') + '" data-action="setReactionHardMode" data-val="true">Hard Mode (-1)</button>' +
+                '</div></div>' +
+                (isHost
+                  ? '<button class="btn gold" data-action="startReactionMatch">Duel Shuru Karein ⚡🔥</button>'
+                  : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host duel shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
+                )
+              : '<div class="settings-section" style="text-align:center">' +
+                '<div style="font-size:40px;margin-bottom:6px">⭕</div>' +
+                '<div style="font-family:var(--font-display);font-size:20px;color:var(--plum);margin-bottom:4px">X aur O — Tic-Tac-Toe</div>' +
+                '<p style="font-size:13px;color:var(--soft);margin-bottom:10px">Host → X (pehli chaal). Guest → O. Har round mein pehli chaal alternate hogi.</p>' +
+                '</div>' +
+                (isHost
+                  ? '<button class="btn ttt-lobby-btn" data-action="startTTT">X &amp; O Shuru Karein ⭕✕</button>'
+                  : '<div class="card" style="text-align:center;padding:10px;background:#FFF9EB;border-color:var(--genda)"><b>Host game shuru karenge ⏳</b><div style="font-size:12px;color:var(--soft)">Aapke partner start karenge...</div></div>'
+                )
+            )
           )
         )
       ) +

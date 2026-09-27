@@ -13,6 +13,8 @@
   var Race = window.JodiRace;
   var SoloArcade = window.JodiSoloArcade;
   var TTTUI = window.JodiTTTUI;
+  var ReactionUI = window.JodiReactionUI;
+  var ReactionEngine = window.JodiReactionEngine;
 
   /* Helper utilities */
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
@@ -75,7 +77,12 @@
     bubbleTimer: null,
     twoMindsTimerInterval: null,
     twoMindsResults: null,
-    sharePartnerPrompt: false
+    sharePartnerPrompt: false,
+    reactionSettings: {
+      duration: 15,
+      hardMode: false
+    },
+    reactionGame: null
   };
 
   /* Confetti Engine */
@@ -149,6 +156,7 @@
   if (TwoMindsUI && TwoMindsUI.init) TwoMindsUI.init(appContext);
   if (SoloArcade && SoloArcade.init) SoloArcade.init(appContext);
   if (TTTUI && TTTUI.init) TTTUI.init(appContext);
+  if (ReactionUI && ReactionUI.init) ReactionUI.init(appContext);
 
   /* Network Event Handlers */
   Net.on('statusChange', function (status) {
@@ -786,6 +794,7 @@
     else if (state.screen === 'twominds_results') html = TwoMindsUI ? TwoMindsUI.vResults() : '';
     else if (state.screen === 'solo_arcade') html = SoloArcade ? SoloArcade.vArcade() : '';
     else if (state.screen === 'ttt') html = TTTUI ? TTTUI.vGame() : '';
+    else if (state.screen === 'reaction') html = ReactionUI ? ReactionUI.vGame() : '';
 
     view.innerHTML = html;
     renderModal();
@@ -841,6 +850,8 @@
       }
     } else if (state.screen === 'ttt' && TTTUI) {
       if (TTTUI.bindBoardEvents) TTTUI.bindBoardEvents();
+    } else if (state.screen === 'reaction' && ReactionUI) {
+      if (ReactionUI.bindArenaEvents) ReactionUI.bindArenaEvents();
     }
   }
 
@@ -908,6 +919,73 @@
     state.ttt = newGame;
     Audio.playTap();
     toast('Naya round! ⭕✕ Shuru!');
+    render();
+  });
+
+  /* ─── Reaction Duel Network Event Handlers ─── */
+  Net.on('UPDATE_REACTION_SETTINGS', function (payload) {
+    if (payload) {
+      state.reactionSettings = {
+        duration: payload.duration || 15,
+        hardMode: !!payload.hardMode
+      };
+      render();
+    }
+  });
+
+  Net.on('REACTION_START', function (payload) {
+    var Engine = window.JodiReactionEngine;
+    if (!Engine) return;
+    var duration = payload.duration || 15;
+    var hardMode = !!payload.hardMode;
+    var game = Engine.createGame({
+      duration: duration,
+      hardMode: hardMode,
+      isSolo: false,
+      p1Name: payload.hostName || Net.getPartnerName() || 'Host',
+      p1Avatar: Net.getPartnerAvatar() || '✨',
+      p2Name: profile.name,
+      p2Avatar: profile.avatar
+    });
+    state.reactionGame = game;
+    state.screen = 'reaction';
+    Audio.playTap();
+    toast('Reaction Duel shuru! ⚡ Ready!');
+    render();
+    if (ReactionUI && ReactionUI.startCountdownSequence) {
+      ReactionUI.startCountdownSequence();
+    }
+  });
+
+  Net.on('REACTION_HIT', function (payload) {
+    var game = state.reactionGame;
+    if (!game || game.state !== 'TARGET_ACTIVE') return;
+    if (ReactionUI && ReactionUI.handleTargetTap) {
+      ReactionUI.handleTargetTap(payload.targetId, 'p2');
+    }
+  });
+
+  Net.on('REACTION_FALSE_START', function (payload) {
+    var game = state.reactionGame;
+    if (!game || game.state !== 'WAITING') return;
+    var Engine = window.JodiReactionEngine;
+    if (Engine) Engine.processFalseStart(game, 'p2');
+    Audio.playFalseStart();
+    render();
+  });
+
+  Net.on('REACTION_RESET', function (payload) {
+    if (ReactionUI && ReactionUI.resetMatch) {
+      ReactionUI.resetMatch(false);
+    }
+  });
+
+  Net.on('REACTION_FINISH', function (payload) {
+    var game = state.reactionGame;
+    if (!game) return;
+    var Engine = window.JodiReactionEngine;
+    if (Engine) Engine.finalizeMatch(game);
+    Audio.playMatch();
     render();
   });
 
@@ -1040,6 +1118,8 @@
       state.game = null;
       if (TwoMinds) TwoMinds.cleanup();
       state.twoMinds = null;
+      if (ReactionUI && ReactionUI.cleanup) ReactionUI.cleanup();
+      state.reactionGame = null;
       render();
     } else if (action === 'setMode') {
       Audio.playTap();
@@ -1327,6 +1407,78 @@
       Audio.playTap();
       if (TTTUI && TTTUI.cleanup) TTTUI.cleanup();
       state.ttt = null;
+      if (Net.getStatus() === 'connected') {
+        state.screen = 'room_ready';
+        Net.send('RETURN_LOBBY', {});
+        toast('Room Lobby mein wapas aa gaye 🏠');
+      } else {
+        state.screen = 'lobby';
+        toast('Lobby mein wapas aa gaye 🏠');
+      }
+      render();
+    } else if (action === 'setReactionDuration') {
+      Audio.playTap();
+      state.reactionSettings.duration = +target.dataset.val;
+      if (Net.getStatus() === 'connected') {
+        Net.send('UPDATE_REACTION_SETTINGS', state.reactionSettings);
+      }
+      render();
+    } else if (action === 'setReactionHardMode') {
+      Audio.playTap();
+      state.reactionSettings.hardMode = target.dataset.val === 'true';
+      if (Net.getStatus() === 'connected') {
+        Net.send('UPDATE_REACTION_SETTINGS', state.reactionSettings);
+      }
+      render();
+    } else if (action === 'startReactionMatch') {
+      Audio.playTap();
+      if (!Net.isHostUser()) return;
+      var Engine = window.JodiReactionEngine;
+      if (!Engine) return;
+      var rSettings = state.reactionSettings || { duration: 15, hardMode: false };
+      var rGame = Engine.createGame({
+        duration: rSettings.duration || 15,
+        hardMode: !!rSettings.hardMode,
+        isSolo: false,
+        p1Name: profile.name,
+        p1Avatar: profile.avatar,
+        p2Name: Net.getPartnerName() || 'Partner',
+        p2Avatar: Net.getPartnerAvatar() || '✨'
+      });
+      state.reactionGame = rGame;
+      state.screen = 'reaction';
+      Net.send('REACTION_START', {
+        duration: rSettings.duration,
+        hardMode: rSettings.hardMode,
+        hostName: profile.name
+      });
+      toast('Reaction Duel shuru! ⚡ Ready!');
+      render();
+      if (ReactionUI && ReactionUI.startCountdownSequence) {
+        ReactionUI.startCountdownSequence();
+      }
+    } else if (action === 'soloPlayReaction') {
+      Audio.playTap();
+      state.modal = null;
+      if (ReactionUI && ReactionUI.launchSolo) {
+        ReactionUI.launchSolo(state.reactionSettings);
+      }
+    } else if (action === 'reactionPlayAgain') {
+      Audio.playTap();
+      var rGame = state.reactionGame;
+      if (!rGame) return;
+      if (rGame.isSolo) {
+        if (ReactionUI && ReactionUI.resetMatch) ReactionUI.resetMatch(false);
+      } else if (Net.isHostUser()) {
+        if (ReactionUI && ReactionUI.resetMatch) ReactionUI.resetMatch(false);
+        Net.send('REACTION_RESET', {});
+      } else {
+        toast('Host se agla match shuru karne ko kahein! ⏳');
+      }
+    } else if (action === 'reactionLeave') {
+      Audio.playTap();
+      if (ReactionUI && ReactionUI.cleanup) ReactionUI.cleanup();
+      state.reactionGame = null;
       if (Net.getStatus() === 'connected') {
         state.screen = 'room_ready';
         Net.send('RETURN_LOBBY', {});

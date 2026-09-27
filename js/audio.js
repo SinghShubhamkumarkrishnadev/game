@@ -260,6 +260,143 @@
 
       noise.start(now);
       noise.stop(now + 0.35);
+    },
+
+    // Quick Reaction Duel — Punchy Target Hit
+    playHit: function () {
+      buzz(16);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var now = ac.currentTime;
+      var osc = ac.createOscillator();
+      var gain = ac.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(620, now);
+      osc.frequency.exponentialRampToValueAtTime(1180, now + 0.06);
+
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+      osc.connect(gain);
+      gain.connect(ac.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.08);
+    },
+
+    // Quick Reaction Duel — Bomb Explosion Penalty
+    playBomb: function () {
+      buzz([50, 40, 60]);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var now = ac.currentTime;
+      // Sub-bass thud
+      var osc = ac.createOscillator();
+      var oscGain = ac.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.exponentialRampToValueAtTime(38, now + 0.28);
+      oscGain.gain.setValueAtTime(0.3, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      osc.connect(oscGain);
+      oscGain.connect(ac.destination);
+      osc.start(now);
+      osc.stop(now + 0.28);
+
+      // Noise blast
+      var bufSize = Math.floor(ac.sampleRate * 0.22);
+      var buffer = ac.createBuffer(1, bufSize, ac.sampleRate);
+      var data = buffer.getChannelData(0);
+      for (var i = 0; i < bufSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      var noise = ac.createBufferSource();
+      noise.buffer = buffer;
+      var filter = ac.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(600, now);
+      filter.frequency.exponentialRampToValueAtTime(80, now + 0.22);
+      var noiseGain = ac.createGain();
+      noiseGain.gain.setValueAtTime(0.28, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(ac.destination);
+      noise.start(now);
+      noise.stop(now + 0.22);
+    },
+
+    // Quick Reaction Duel — False Start Harsh Buzzer
+    playFalseStart: function () {
+      buzz([40, 50, 60]);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var now = ac.currentTime;
+      // Dual dissonant square/saw oscillators
+      [145, 205].forEach(function (freq) {
+        var osc = ac.createOscillator();
+        var gain = ac.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, now);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.85, now + 0.22);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        osc.start(now);
+        osc.stop(now + 0.22);
+      });
+    },
+
+    // Quick Reaction Duel — Fast Rising Multi-Tone Streak Sparkle
+    playStreak: function () {
+      buzz([18, 25, 20]);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var now = ac.currentTime;
+      [660, 880, 1175, 1568].forEach(function (freq, i) {
+        var osc = ac.createOscillator();
+        var gain = ac.createGain();
+        var t = now + i * 0.05;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0.16, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        osc.start(t);
+        osc.stop(t + 0.12);
+      });
+    },
+
+    // Quick Reaction Duel — Frenzy Mode Warning Riser
+    playFrenzySting: function () {
+      buzz([30, 40, 50]);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var now = ac.currentTime;
+      var osc = ac.createOscillator();
+      var gain = ac.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(380, now);
+      osc.frequency.exponentialRampToValueAtTime(980, now + 0.25);
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.connect(gain);
+      gain.connect(ac.destination);
+      osc.start(now);
+      osc.stop(now + 0.25);
     }
   };
 

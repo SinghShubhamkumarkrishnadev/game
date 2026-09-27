@@ -161,6 +161,23 @@
           '<div><div class="guide-step-title">Sprinkler Confetti &amp; Rematch</div>' +
           '<div class="guide-step-desc">Jeetne par screen par vibrant sprinkler confetti blast hoti hai aur detailed winner modal aata hai jahan se Retry ya Exit kar sakte hain.</div></div>' +
           '</div>';
+      } else if (tab === 'reaction') {
+        contentHtml = '<div class="guide-badge-box">⚡ <span><b>Quick Reaction Duel</b> — Pure speed aur reflex game: Kaun faster react karta hai?</span></div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">1</span>' +
+          '<div><div class="guide-step-title">Wait... Phir Instant Tap!</div>' +
+          '<div class="guide-step-desc">Target aate hi sabse pehle tap karo. Agar target aane se pehle tap kiya to <b class="guide-highlight">⚠️ False Start</b> hoga aur point partner ko mil jayega!</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">2</span>' +
+          '<div><div class="guide-step-title">Special Targets &amp; Bombs</div>' +
+          '<div class="guide-step-desc">🎯 <b>Normal (+1)</b>, ⚡ <b>Lightning (+2)</b>, 🌀 <b>Drifter (+1/+2)</b>, 🎯 <b>Tiny (+2)</b>. Magar 💣 <b>Bomb</b> ko galti se bhi mat chhuna — tap kiya to <b class="guide-highlight">-1 Point Penalty!</b></div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">3</span>' +
+          '<div><div class="guide-step-title">⚡ Frenzy Mode &amp; Streaks</div>' +
+          '<div class="guide-step-desc">Aakhri ke seconds me <b>Frenzy Mode</b> shuru hota hai — targets super fast aayenge aur consecutive hits par 🔥 <b>Streaks</b> banti hain!</div></div>' +
+          '</div>';
       } else if (tab === 'install') {
         contentHtml = '<div class="guide-badge-box">📲 <span>Ye game ek <b>Progressive Web App (PWA)</b> hai — bina App Store ke direct install hota hai!</span></div>' +
           '<div class="guide-step-card">' +
@@ -190,6 +207,7 @@
         '<button type="button" class="guide-tab-btn ' + (tab === 'scribble' ? 'active' : '') + '" data-action="setGuideTab" data-tab="scribble">🎨 Scribble</button>' +
         '<button type="button" class="guide-tab-btn ' + (tab === 'race' ? 'active' : '') + '" data-action="setGuideTab" data-tab="race">🏍️ 3D Race</button>' +
         '<button type="button" class="guide-tab-btn ' + (tab === 'tictactoe' ? 'active' : '') + '" data-action="setGuideTab" data-tab="tictactoe">⭕ Tic-Tac-Toe</button>' +
+        '<button type="button" class="guide-tab-btn ' + (tab === 'reaction' ? 'active' : '') + '" data-action="setGuideTab" data-tab="reaction">⚡ Reaction</button>' +
         '<button type="button" class="guide-tab-btn ' + (tab === 'install' ? 'active' : '') + '" data-action="setGuideTab" data-tab="install">📲 Install</button>' +
         '</div>' +
         '<div class="guide-content-scroll">' + contentHtml + '</div>' +

@@ -1,5 +1,5 @@
 /* Jodi Sync Service Worker - Offline, PWA Caching & Instant Auto-Update */
-const CACHE_NAME = 'jodi-v4.0-superbikes';
+const CACHE_NAME = 'jodi-v4.8-reaction-duel';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -16,6 +16,13 @@ const ASSETS_TO_CACHE = [
   './js/race.js',
   './js/scribble.js',
   './js/two-minds-ui.js',
+  './js/tictactoe.js',
+  './js/tictactoe-fx.js',
+  './js/tictactoe-ui.js',
+  './js/reaction-duel.js',
+  './js/reaction-duel-fx.js',
+  './js/reaction-duel-ui.js',
+  './js/solo-arcade.js',
   './js/lobby.js',
   './js/modals.js',
   './js/app.js',

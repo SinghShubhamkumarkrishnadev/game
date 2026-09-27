@@ -23,6 +23,18 @@
    */
   var GAME_CARDS = [
     {
+      id: 'reaction',
+      icon: '⚡',
+      title: 'Quick Reaction Duel',
+      tagline: 'Pure speed aur reflex — kaun faster hai?',
+      desc: 'Screen par achanak target aayega — jo sabse pehle tap karega point uska! False start se bacho, bombs se door raho aur AI Reflex bot ko harao.',
+      action: 'soloPlayReaction',
+      btnClass: 'gold',
+      btnLabel: 'Reflex Duel Solo Khelo ⚡',
+      badgeText: 'Reflex AI',
+      badgeStyle: 'background:#FFF8E6;color:#B37D00;border-color:var(--genda)'
+    },
+    {
       id: 'ttt',
       icon: '⭕',
       title: 'X aur O — Tic-Tac-Toe',
