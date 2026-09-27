@@ -3993,9 +3993,9 @@ html, body {
   animation-fill-mode: forwards, none;
 }
 
-.line-x .ttt-win-line-core { stroke: url(#tttGoldGrad); }
+.line-x .ttt-win-line-core { stroke: #f3b940; stroke: url(#tttGoldGrad); }
 .line-x .ttt-win-line-glow { stroke: #ffcf6b; }
-.line-o .ttt-win-line-core { stroke: url(#tttTealGrad); }
+.line-o .ttt-win-line-core { stroke: #4fd8b8; stroke: url(#tttTealGrad); }
 .line-o .ttt-win-line-glow { stroke: #5be9c9; }
 
 @keyframes tttDrawLine {

@@ -209,20 +209,21 @@
    * Path draws from the first winning cell through the second to the third winning cell.
    */
   var WIN_LINE_COORDS = {
-    '0,1,2': { x1: 18, y1: 50, x2: 282, y2: 50 },    // Top row
-    '3,4,5': { x1: 18, y1: 150, x2: 282, y2: 150 },  // Middle row
-    '6,7,8': { x1: 18, y1: 250, x2: 282, y2: 250 },  // Bottom row
-    '0,3,6': { x1: 50, y1: 18, x2: 50, y2: 282 },    // Left column
-    '1,4,7': { x1: 150, y1: 18, x2: 150, y2: 282 },  // Middle column
-    '2,5,8': { x1: 250, y1: 18, x2: 250, y2: 282 },  // Right column
-    '0,4,8': { x1: 22, y1: 22, x2: 278, y2: 278 },    // Diagonal top-left to bottom-right
-    '2,4,6': { x1: 278, y1: 22, x2: 22, y2: 278 }     // Diagonal top-right to bottom-left
+    '0,1,2': { x1: 18, y1: 50, x2: 282, y2: 50.01 },    // Top row
+    '3,4,5': { x1: 18, y1: 150, x2: 282, y2: 150.01 },  // Middle row
+    '6,7,8': { x1: 18, y1: 250, x2: 282, y2: 250.01 },  // Bottom row
+    '0,3,6': { x1: 50, y1: 18, x2: 50.01, y2: 282 },    // Left column
+    '1,4,7': { x1: 150, y1: 18, x2: 150.01, y2: 282 },  // Middle column
+    '2,5,8': { x1: 250, y1: 18, x2: 250.01, y2: 282 },  // Right column
+    '0,4,8': { x1: 22, y1: 22, x2: 278, y2: 278 },      // Diagonal top-left to bottom-right
+    '2,4,6': { x1: 278, y1: 22, x2: 22, y2: 278 }       // Diagonal top-right to bottom-left
   };
 
   /**
    * Renders the animated cut-through SVG line connecting winning cells, as a
    * molten-gold (X) or jade-glow (O) slash with soft bloom, drawn on with a
-   * dash-offset reveal. Definitions are inlined per-render (cheap, scoped).
+   * dash-offset reveal. Uses userSpaceOnUse coordinates so horizontal, vertical,
+   * and diagonal paths render consistently without zero-bounding-box collapse.
    */
   function _renderWinLineSvg(winLine, winner, isCompleted) {
     if (!winLine || winLine.length < 3) return '';
@@ -232,29 +233,30 @@
 
     var colorClass = (winner === 'O') ? 'line-o' : 'line-x';
     var completeClass = isCompleted ? ' line-complete' : '';
+    var dPath = 'M ' + c.x1 + ' ' + c.y1 + ' L ' + c.x2 + ' ' + c.y2;
 
     return '<svg class="ttt-win-line-svg ' + colorClass + completeClass + '" id="tttWinLineSvg" viewBox="0 0 300 300" aria-hidden="true">' +
       '<defs>' +
-        '<filter id="tttWinGlow" x="-60%" y="-60%" width="220%" height="220%">' +
+        '<filter id="tttWinGlow" filterUnits="userSpaceOnUse" x="-50" y="-50" width="400" height="400">' +
           '<feGaussianBlur stdDeviation="6" result="tttBlur" />' +
           '<feMerge>' +
             '<feMergeNode in="tttBlur" />' +
             '<feMergeNode in="SourceGraphic" />' +
           '</feMerge>' +
         '</filter>' +
-        '<linearGradient id="tttGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">' +
+        '<linearGradient id="tttGoldGrad" gradientUnits="userSpaceOnUse" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '">' +
           '<stop offset="0%" stop-color="#fff3c4" />' +
           '<stop offset="45%" stop-color="#f3b940" />' +
           '<stop offset="100%" stop-color="#b9781f" />' +
         '</linearGradient>' +
-        '<linearGradient id="tttTealGrad" x1="0%" y1="0%" x2="100%" y2="100%">' +
+        '<linearGradient id="tttTealGrad" gradientUnits="userSpaceOnUse" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '">' +
           '<stop offset="0%" stop-color="#eafaf3" />' +
           '<stop offset="45%" stop-color="#4fd8b8" />' +
           '<stop offset="100%" stop-color="#0e7a63" />' +
         '</linearGradient>' +
       '</defs>' +
-      '<line class="ttt-win-line-glow" id="tttWinLineGlow" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '" pathLength="100" />' +
-      '<line class="ttt-win-line-core" id="tttWinLineCore" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '" pathLength="100" />' +
+      '<path class="ttt-win-line-glow" id="tttWinLineGlow" d="' + dPath + '" pathLength="100" />' +
+      '<path class="ttt-win-line-core" id="tttWinLineCore" d="' + dPath + '" pathLength="100" />' +
     '</svg>';
   }
 
