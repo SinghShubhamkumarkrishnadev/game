@@ -271,16 +271,7 @@
         '<button type="button" class="btn alt sm" style="width:100%" data-action="openGuideFromSettings">📖 User Guide Kholein</button>' +
         '</div>' +
 
-        // Section 4: Invite Partner via WhatsApp
-        '<div class="settings-card" style="background:#F6FBF7;border-color:var(--good)">' +
-        '<div class="settings-card-header">' +
-        '<span class="sch-icon">💌</span>' +
-        '<div><div class="sch-title" style="color:var(--good)">Partner Ko Bulayein</div><div class="sch-desc">WhatsApp par link share karke invite karein</div></div>' +
-        '</div>' +
-        '<button type="button" class="btn primary sm" style="width:100%;background:var(--good);border-color:var(--stroke)" data-action="shareWhatsApp">📲 WhatsApp Par Invite Bhejo</button>' +
-        '</div>' +
-
-        // Section 5: App Install (PWA)
+        // Section 4: App Install (PWA)
         '<div class="settings-card" style="background:#FFF9FC;border-color:var(--rani)">' +
         '<div class="settings-card-header">' +
         '<span class="sch-icon">📲</span>' +
