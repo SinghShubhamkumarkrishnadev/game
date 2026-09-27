@@ -108,7 +108,39 @@
   }
 
   /**
-   * Renders the 3×3 mahogany wooden board and cells.
+   * Precise 300x300 viewBox coordinate mapping for all 8 winning paths.
+   * Path draws from the first winning cell through the second to the third winning cell.
+   */
+  var WIN_LINE_COORDS = {
+    '0,1,2': { x1: 18, y1: 50, x2: 282, y2: 50 },    // Top row
+    '3,4,5': { x1: 18, y1: 150, x2: 282, y2: 150 },  // Middle row
+    '6,7,8': { x1: 18, y1: 250, x2: 282, y2: 250 },  // Bottom row
+    '0,3,6': { x1: 50, y1: 18, x2: 50, y2: 282 },    // Left column
+    '1,4,7': { x1: 150, y1: 18, x2: 150, y2: 282 },  // Middle column
+    '2,5,8': { x1: 250, y1: 18, x2: 250, y2: 282 },  // Right column
+    '0,4,8': { x1: 22, y1: 22, x2: 278, y2: 278 },    // Diagonal top-left to bottom-right
+    '2,4,6': { x1: 278, y1: 22, x2: 22, y2: 278 }     // Diagonal top-right to bottom-left
+  };
+
+  /**
+   * Renders the animated cut-through SVG line connecting winning cells.
+   */
+  function _renderWinLineSvg(winLine, winner) {
+    if (!winLine || winLine.length < 3) return '';
+    var key = winLine.slice().sort(function (a, b) { return a - b; }).join(',');
+    var c = WIN_LINE_COORDS[key];
+    if (!c) return '';
+
+    var colorClass = (winner === 'O') ? 'line-o' : 'line-x';
+
+    return '<svg class="ttt-win-line-svg ' + colorClass + '" viewBox="0 0 300 300" aria-hidden="true">' +
+      '<line class="ttt-win-line-glow" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '" pathLength="100" />' +
+      '<line class="ttt-win-line-core" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '" pathLength="100" />' +
+    '</svg>';
+  }
+
+  /**
+   * Renders the 3×3 mahogany wooden board and cells with winning cut-through line.
    */
   function _renderBoard(ttt, isMyTurn) {
     var boardHtml = '<div class="ttt-board" id="tttBoard">';
@@ -132,6 +164,12 @@
       }
       boardHtml += '</div>';
     }
+
+    /* Immediately draw the smooth cut-through winning line when win is detected */
+    if (ttt.winner && ttt.winLine) {
+      boardHtml += _renderWinLineSvg(ttt.winLine, ttt.winner);
+    }
+
     boardHtml += '</div>';
     return boardHtml;
   }
@@ -291,11 +329,16 @@
     var c = getCtx();
     var ttt = c.state && c.state.ttt;
 
-    // Trigger celebratory upward sprinkler fountain if game is won
+    // Trigger celebratory upward sprinkler fountain when win popup enters
     if (ttt && ttt.winner) {
       var canvas = document.getElementById('tttSprinklerCanvas');
       if (canvas && global.JodiTTTFx && global.JodiTTTFx.startSprinkler) {
-        global.JodiTTTFx.startSprinkler(canvas, 3600);
+        setTimeout(function () {
+          var curTTT = c.state && c.state.ttt;
+          if (curTTT && curTTT.winner) {
+            global.JodiTTTFx.startSprinkler(canvas, 3600);
+          }
+        }, 500);
       }
     } else {
       if (global.JodiTTTFx && global.JodiTTTFx.stopSprinkler) {
