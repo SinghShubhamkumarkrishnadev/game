@@ -282,7 +282,8 @@
 
   /* ================= ENVIRONMENT & LIGHTING ================= */
   function setupLighting() {
-    scene.add(new THREE.AmbientLight(0xF4D6BC, 0.7));
+    scene.add(new THREE.AmbientLight(0xF4D6BC, 0.55));
+    scene.add(new THREE.HemisphereLight(0xFFF2E6, 0x241830, 0.75));
 
     sun = new THREE.DirectionalLight(0xFFB060, 1.4);
     sun.position.copy(SUN_OFFSET);
@@ -711,22 +712,26 @@
         playerBike.frontWheel.rotation.x += spin;
         playerBike.rearWheel.rotation.x += spin;
       }
+
+      if (playerBike.rider && typeof playerBike.rider.updatePose === 'function') {
+        playerBike.rider.updatePose(p.tiltAngle, p.isNitro, p.speed);
+      }
     }
   }
 
   /* ================= CHASE CAMERA ================= */
   function updateCamera(delta) {
     var p = bikePhysics;
-    var camDist = 9.2 + (p.isNitro ? 2.2 : 0);
+    var camDist = 5.6 + (p.isNitro ? 1.5 : 0);
 
-    // Ride the spline behind the player so the camera follows hairpins instead of cutting through them
+    // Ride the spline behind the player so the camera follows hairpins closely
     trackCurve.getPointAt(wrap01(p.trackProgress - camDist / curveLength), _behind);
-    _camPos.copy(_behind).addScaledVector(playerFrame.left, p.lateralOffset * LANE_WIDTH * 0.6);
-    _camPos.y = Math.max(_behind.y + 3.6, playerFrame.pos.y + 1.6);   // never below the road / the bike's eye line
+    _camPos.copy(_behind).addScaledVector(playerFrame.left, p.lateralOffset * LANE_WIDTH * 0.55);
+    _camPos.y = Math.max(_behind.y + 2.1, playerFrame.pos.y + 1.45);   // optimal chase cam eye line
 
     _camLook.copy(playerFrame.pos);
-    _camLook.y += 1.6;
-    _camLook.addScaledVector(playerFrame.fwd, 6);
+    _camLook.y += 1.25;
+    _camLook.addScaledVector(playerFrame.fwd, 4.5);
 
     if (cameraSnap) {
       camera.position.copy(_camPos);
@@ -808,6 +813,10 @@
         var spinP = q.speed * delta * 4;
         partnerBike.frontWheel.rotation.x += spinP;
         partnerBike.rearWheel.rotation.x += spinP;
+      }
+
+      if (partnerBike.rider && typeof partnerBike.rider.updatePose === 'function') {
+        partnerBike.rider.updatePose(q.tiltAngle, q.isNitro, q.speed);
       }
     }
 
@@ -1266,6 +1275,11 @@
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setSize(w, h);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    if (THREE.sRGBEncoding) renderer.outputEncoding = THREE.sRGBEncoding;
+    if (THREE.ACESFilmicToneMapping) {
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+    }
     renderer.shadowMap.enabled = ENABLE_SHADOWS;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);

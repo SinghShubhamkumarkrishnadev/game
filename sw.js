@@ -1,5 +1,5 @@
 /* Jodi Sync Service Worker - Offline, PWA Caching & Instant Auto-Update */
-const CACHE_NAME = 'jodi-v2.7-fresh';
+const CACHE_NAME = 'jodi-v4.0-superbikes';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

@@ -211,27 +211,27 @@
             '<div class="settings-label"><span>🏍️ Apni Superbike Chuno</span><small>' + state.selectedBikeTheme.toUpperCase() + '</small></div>' +
             '<div class="bike-select-grid">' +
             '<div class="bike-card ' + (state.selectedBikeTheme === 'sport' ? 'active' : '') + '" data-action="pickBike" data-bike="sport">' +
-            '<span class="bike-icon">🏍️</span>' +
+            '<span class="bike-icon">🏁</span>' +
             '<div class="bike-name">Rani Neon Sport</div>' +
-            '<div class="bike-tag">Speed &amp; Agility</div>' +
+            '<div class="bike-tag">1000cc V4 MotoGP • Winglets</div>' +
             '<div class="bike-color-bar" style="background:linear-gradient(90deg, #D6246E, #FFB000)"></div>' +
             '</div>' +
             '<div class="bike-card ' + (state.selectedBikeTheme === 'bullet' ? 'active' : '') + '" data-action="pickBike" data-bike="bullet">' +
-            '<span class="bike-icon">🏍️</span>' +
+            '<span class="bike-icon">👑</span>' +
             '<div class="bike-name">Royal Bullet 350</div>' +
-            '<div class="bike-tag">Heavy Metal Cruiser</div>' +
-            '<div class="bike-color-bar" style="background:linear-gradient(90deg, #1A1A1A, #E6C280)"></div>' +
+            '<div class="bike-tag">Heavy Cruiser • Chrome Thump</div>' +
+            '<div class="bike-color-bar" style="background:linear-gradient(90deg, #1A1A1A, #D4AF37)"></div>' +
             '</div>' +
             '<div class="bike-card ' + (state.selectedBikeTheme === 'turbo' ? 'active' : '') + '" data-action="pickBike" data-bike="turbo">' +
-            '<span class="bike-icon">🏍️</span>' +
+            '<span class="bike-icon">⚡</span>' +
             '<div class="bike-name">Mor Teal Turbo</div>' +
-            '<div class="bike-tag">Nitrous Speed Monster</div>' +
+            '<div class="bike-tag">Supercharged V4 • Cyber Beast</div>' +
             '<div class="bike-color-bar" style="background:linear-gradient(90deg, #0B7A7C, #38E1E4)"></div>' +
             '</div>' +
             '<div class="bike-card ' + (state.selectedBikeTheme === 'cafe' ? 'active' : '') + '" data-action="pickBike" data-bike="cafe">' +
-            '<span class="bike-icon">🏍️</span>' +
+            '<span class="bike-icon">☕</span>' +
             '<div class="bike-name">Kesar Cafe Racer</div>' +
-            '<div class="bike-tag">Desi Retro Beast</div>' +
+            '<div class="bike-tag">650cc Twin • Neo-Retro Custom</div>' +
             '<div class="bike-color-bar" style="background:linear-gradient(90deg, #E65100, #FFD54F)"></div>' +
             '</div></div>' +
             '<p style="font-size:12px;color:var(--soft);margin-bottom:8px;font-weight:700">3D Real Physics • Procedural Curvy Track • Nitro Booster</p>' +

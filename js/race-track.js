@@ -404,10 +404,10 @@
   function makeRoadTexture(rng) {
     var W = 512, H = 1024, cv = makeCanvas(W, H), g = cv.getContext('2d'), i, s, t, k;
     var img = g.createImageData(W, H), d = img.data, p = 0, v, r;
-    for (i = 0; i < W * H; i++) {                          // asphalt aggregate
-      v = 38 + rng() * 16; r = rng();
-      if (r > 0.985) v += 34 + rng() * 40; else if (r < 0.03) v -= 12;
-      d[p++] = v; d[p++] = v; d[p++] = v + 3; d[p++] = 255;
+    for (i = 0; i < W * H; i++) {                          // high-grip asphalt aggregate
+      v = 28 + rng() * 14; r = rng();
+      if (r > 0.985) v += 38 + rng() * 40; else if (r < 0.03) v -= 10;
+      d[p++] = v; d[p++] = v; d[p++] = v + 4; d[p++] = 255;
     }
     g.putImageData(img, 0, 0);
     function wrapBlob(x, y, rx, ry, col) {
@@ -419,19 +419,19 @@
         g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, TAU); g.fill();
       }
     }
-    for (i = 0; i < 46; i++) wrapBlob(rng() * W, rng() * H, 30 + rng() * 90, 40 + rng() * 160, rng() < 0.6 ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.025)');
-    // rubbered-in racing lines (high-grip bands)
+    for (i = 0; i < 46; i++) wrapBlob(rng() * W, rng() * H, 30 + rng() * 90, 40 + rng() * 160, rng() < 0.6 ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.03)');
+    // high-grip rubbered-in racing groove bands
     [0.30, 0.70].forEach(function (f) {
-      var x = W * f, gr = g.createLinearGradient(x - 62, 0, x + 62, 0);
-      gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.5, 'rgba(0,0,0,0.30)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = gr; g.fillRect(x - 62, 0, 124, H);
+      var x = W * f, gr = g.createLinearGradient(x - 65, 0, x + 65, 0);
+      gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.5, 'rgba(0,0,0,0.36)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(x - 65, 0, 130, H);
     });
-    // tyre skid marks (wrap vertically so the tile stays seamless)
+    // tyre skid marks (wrap vertically for seamless tile)
     g.lineCap = 'round';
-    for (s = 0; s < 16; s++) {
+    for (s = 0; s < 18; s++) {
       var lane = rng() < 0.5 ? 0.30 : 0.70;
-      var x0 = W * (lane + (rng() - 0.5) * 0.2), y0 = rng() * H, len = 200 + rng() * 520;
-      var wob = 4 + rng() * 9, fr = 1 + Math.floor(rng() * 3), wd = 3 + rng() * 4, al = 0.16 + rng() * 0.26;
+      var x0 = W * (lane + (rng() - 0.5) * 0.2), y0 = rng() * H, len = 220 + rng() * 520;
+      var wob = 4 + rng() * 9, fr = 1 + Math.floor(rng() * 3), wd = 3 + rng() * 4, al = 0.20 + rng() * 0.26;
       for (t = 0; t < len; t += 8) {
         var fade = Math.sqrt(Math.sin(t / len * Math.PI)) * al;
         g.strokeStyle = 'rgba(6,6,8,' + fade.toFixed(3) + ')'; g.lineWidth = wd;
@@ -443,37 +443,42 @@
         }
       }
     }
-    for (s = 0; s < 9; s++) {                              // heavy braking marks
-      var bx = W * (rng() < 0.5 ? 0.30 : 0.70) + (rng() - 0.5) * 60, by = rng() * H, bl = 90 + rng() * 150;
+    for (s = 0; s < 10; s++) {                              // heavy braking marks
+      var bx = W * (rng() < 0.5 ? 0.30 : 0.70) + (rng() - 0.5) * 60, by = rng() * H, bl = 90 + rng() * 160;
       for (t = 0; t < bl; t += 6) {
-        g.strokeStyle = 'rgba(4,4,6,' + (0.42 * Math.min(1, t / 22) * (1 - t / bl * 0.6)).toFixed(3) + ')';
-        g.lineWidth = 8 + rng() * 2;
+        g.strokeStyle = 'rgba(4,4,6,' + (0.45 * Math.min(1, t / 22) * (1 - t / bl * 0.6)).toFixed(3) + ')';
+        g.lineWidth = 8 + rng() * 3;
         for (k = -1; k <= 1; k++) { g.beginPath(); g.moveTo(bx, by + t + k * H); g.lineTo(bx, by + t + 6 + k * H); g.stroke(); }
       }
     }
-    for (i = 0; i < 5; i++) {                              // tar seams
+    for (i = 0; i < 5; i++) {                              // sealed tar seams
       var yy = (i + 0.3 + rng() * 0.4) * H / 5;
-      g.strokeStyle = 'rgba(8,8,10,0.24)'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, yy);
+      g.strokeStyle = 'rgba(8,8,10,0.28)'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, yy);
       for (k = 1; k <= 16; k++) g.lineTo(k * W / 16, yy + (rng() - 0.5) * 6);
       g.stroke();
     }
-    // painted lines: edge lines + dashed centre line
-    g.fillStyle = 'rgba(240,240,236,0.93)';
-    g.fillRect(16, 0, 7, H); g.fillRect(W - 23, 0, 7, H);
-    g.fillStyle = 'rgba(255,214,120,0.82)';
-    for (i = 0; i < 4; i++) g.fillRect(W / 2 - 3.5, i * 256 + 20, 7, 100);
-    g.fillStyle = 'rgba(28,28,30,0.55)';                   // paint wear
+    // painted white track boundaries + warm amber racing centerline
+    g.fillStyle = 'rgba(246,246,242,0.96)';
+    g.fillRect(16, 0, 8, H); g.fillRect(W - 24, 0, 8, H);
+    g.fillStyle = 'rgba(255,200,60,0.88)';
+    for (i = 0; i < 4; i++) g.fillRect(W / 2 - 3.5, i * 256 + 20, 7, 105);
+    g.fillStyle = 'rgba(28,28,30,0.50)';                   // paint wear micro-grain
     for (i = 0; i < 7000; i++) {
-      var pick = rng(), px = pick < 0.34 ? 16 + rng() * 7 : (pick < 0.68 ? W - 23 + rng() * 7 : W / 2 - 3.5 + rng() * 7);
+      var pick = rng(), px = pick < 0.34 ? 16 + rng() * 8 : (pick < 0.68 ? W - 24 + rng() * 8 : W / 2 - 3.5 + rng() * 7);
       g.fillRect(px, rng() * H, 1 + rng() * 1.5, 1 + rng() * 2);
     }
     return tex(cv, true, 4);
   }
   function makeKerbTexture() {
     var cv = makeCanvas(32, 128), g = cv.getContext('2d');
-    g.fillStyle = '#d8201c'; g.fillRect(0, 0, 32, 64);
-    g.fillStyle = '#f4f4ef'; g.fillRect(0, 64, 32, 64);
-    g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, 0, 32, 3); g.fillRect(0, 61, 32, 6); g.fillRect(0, 125, 32, 3);
+    g.fillStyle = '#cf1d18'; g.fillRect(0, 0, 32, 64);
+    g.fillStyle = '#fafaf6'; g.fillRect(0, 64, 32, 64);
+    g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(0, 0, 32, 3); g.fillRect(0, 61, 32, 6); g.fillRect(0, 125, 32, 3);
+    // Tire rubber scuff marks on kerb rumble strips
+    g.fillStyle = 'rgba(12,12,14,0.28)';
+    for (var i = 0; i < 8; i++) {
+      g.fillRect(Math.random() * 20, Math.random() * 128, 4 + Math.random() * 8, 2);
+    }
     return tex(cv, true, 4);
   }
   function makeNoiseTexture(rng) {
@@ -786,7 +791,7 @@
       var v = i * S.ds / tile;
       rows.push({ a: roadPt(i, -HW, lift), b: roadPt(i, HW, lift), n: nrmAt(i), ua: [0, v], ub: [1, v] });
     }
-    var mat = B.mat(new THREE.MeshStandardMaterial({ map: T.road, roughness: 0.86, metalness: 0.05 }));
+    var mat = B.mat(new THREE.MeshStandardMaterial({ map: T.road, roughness: 0.72, metalness: 0.08 }));
     trackMesh = B.mesh(stripGeometry(rows, false), mat, { receiveShadow: true, name: 'road' });
 
     // gravel / grass shoulders blend the road into the terrain
@@ -819,7 +824,7 @@
       }
     });
     var g = kb.build();
-    if (g) B.mesh(g, B.mat(new THREE.MeshStandardMaterial({ map: T.kerb, roughness: 0.6, metalness: 0.02, side: THREE.DoubleSide })), { receiveShadow: true });
+    if (g) B.mesh(g, B.mat(new THREE.MeshStandardMaterial({ map: T.kerb, roughness: 0.52, metalness: 0.04, side: THREE.DoubleSide })), { receiveShadow: true });
   }
 
   function addDecal(B, mat, sC, len, latC, wid, rowsN) {
