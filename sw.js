@@ -1,5 +1,5 @@
 /* Jodi Sync Service Worker - Offline, PWA Caching & Instant Auto-Update */
-const CACHE_NAME = 'jodi-v2.5';
+const CACHE_NAME = 'jodi-v2.7-fresh';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -14,6 +14,10 @@ const ASSETS_TO_CACHE = [
   './js/race-track.js',
   './js/race-models.js',
   './js/race.js',
+  './js/scribble.js',
+  './js/two-minds-ui.js',
+  './js/lobby.js',
+  './js/modals.js',
   './js/app.js',
   './assets/icon.svg',
   './assets/icon-192.png',
@@ -51,18 +55,18 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Network first strategy: always get latest code, fall back to cache when offline
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Network-revalidate in background
-        fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-          }
-        }).catch(() => {});
-        return cachedResponse;
-      }
-      return fetch(event.request);
-    })
+    fetch(event.request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          var responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        return caches.match(event.request);
+      })
   );
 });

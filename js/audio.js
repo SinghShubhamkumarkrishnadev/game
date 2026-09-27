@@ -46,6 +46,31 @@
 
     buzz: buzz,
 
+    // Bubbly pop synthesizer for chat messages, reactions and hints
+    playPop: function () {
+      buzz(10);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var osc = ac.createOscillator();
+      var gain = ac.createGain();
+      var now = ac.currentTime;
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(920, now + 0.05);
+
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+      osc.connect(gain);
+      gain.connect(ac.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.05);
+    },
+
     // Subtle button tap blip
     playTap: function () {
       buzz(12);

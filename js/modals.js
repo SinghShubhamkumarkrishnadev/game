@@ -23,6 +23,35 @@
       return;
     }
 
+    if (state.modal === 'confirm_exit_scribble') {
+      m.innerHTML = '<div class="modal-sheet" style="text-align:center">' +
+        '<div style="font-size:38px;margin-bottom:6px">🚪</div>' +
+        '<h2 style="font-family:var(--font-display);font-size:22px;color:var(--plum);margin-bottom:6px">Game Chhodein?</h2>' +
+        '<p style="color:var(--soft);font-size:13.5px;margin-bottom:14px;line-height:1.4">Kya aap match chhodkar bahar jaana chahte hain? Partner ko bhi pata chal jayega ki aap chale gaye.</p>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' +
+        '<button type="button" class="btn bad" data-action="confirmExitScribble">Haan, Game Chhodo 🚪</button>' +
+        '<button type="button" class="btn ghost" data-action="closeModal">Nahi, Khelte Raho 🎮</button>' +
+        '</div></div>';
+      m.className = 'on';
+      return;
+    } else if (state.modal === 'partner_left_scribble') {
+      var pName = esc(state.partnerLeftName || 'Partner');
+      m.innerHTML = '<div class="modal-sheet" style="text-align:center">' +
+        '<div style="font-size:42px;margin-bottom:6px">⚠️</div>' +
+        '<h2 style="font-family:var(--font-display);font-size:22px;color:var(--plum);margin-bottom:6px">Partner Offline Ho Gaye!</h2>' +
+        '<p style="color:var(--soft);font-size:14px;margin-bottom:6px">Aapke partner <b>' + pName + '</b> abhi online ya active nahi hain.</p>' +
+        '<div style="background:var(--surface2);border:1.5px dashed var(--line);border-radius:var(--radius-sm);padding:8px 10px;font-size:12.5px;color:var(--soft);margin-bottom:14px;line-height:1.4">' +
+        'Shayad unka network toot gaya ya unhone game exit kar diya. Intezar karne ki zaroorat nahi hai!' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' +
+        '<button type="button" class="btn primary" data-action="continueSoloAfterPartnerLeft">🎨 Solo Practice Khelte Raho</button>' +
+        '<button type="button" class="btn alt" data-action="exitToLobbyAfterPartnerLeft">🏠 Main Lobby Me Jao</button>' +
+        '<button type="button" class="btn ghost sm" data-action="createNewRoomAfterPartnerLeft">🔁 Naya Room Banao</button>' +
+        '</div></div>';
+      m.className = 'on';
+      return;
+    }
+
     if (state.modal === 'join') {
       m.innerHTML = '<div class="modal-sheet">' +
         '<h2 style="font-family:var(--font-display);font-size:22px;color:var(--plum);margin-bottom:4px">Room Code Daalo</h2>' +

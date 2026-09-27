@@ -170,12 +170,46 @@
     render();
   });
 
+  Net.on('PARTNER_LEFT_GAME', function (payload) {
+    var pName = (payload && payload.by) || Net.getPartnerName() || 'Partner';
+    if (state.screen === 'game') {
+      if (Scribble && Scribble.stopMatchTimer) Scribble.stopMatchTimer();
+      Audio.playMiss();
+      if (state.game) state.game.partnerOffline = true;
+      state.partnerLeftName = pName;
+      state.modal = 'partner_left_scribble';
+      render();
+    } else if (state.screen === 'twominds') {
+      if (TwoMindsUI && TwoMindsUI.stopTimer) TwoMindsUI.stopTimer();
+      Audio.playMiss();
+      state.partnerLeftName = pName;
+      state.modal = 'partner_left_scribble';
+      render();
+    } else {
+      toast('⚠️ ' + pName + ' ne game chhod diya');
+    }
+  });
+
   Net.on('partnerDisconnected', function () {
     if (state.screen === 'race') {
       toast('Partner connection lost ⚠️ AI autopilot chal raha hai! Race continue karein.');
       if (window.JodiRace && typeof window.JodiRace.setSoloAI === 'function') {
         window.JodiRace.setSoloAI(true);
       }
+      return;
+    }
+    if (state.screen === 'game' || state.screen === 'twominds') {
+      if (state.screen === 'game' && Scribble && Scribble.stopMatchTimer) {
+        Scribble.stopMatchTimer();
+      }
+      if (state.screen === 'twominds' && TwoMindsUI && TwoMindsUI.stopTimer) {
+        TwoMindsUI.stopTimer();
+      }
+      Audio.playMiss();
+      if (state.game) state.game.partnerOffline = true;
+      state.partnerLeftName = Net.getPartnerName() || 'Partner';
+      state.modal = 'partner_left_scribble';
+      render();
       return;
     }
     toast('Partner disconnect ho gaye 🔴');
@@ -311,41 +345,43 @@
 
   Net.on('GUESS_FEED', function (entry) {
     if (!state.game) return;
-    state.game.chat.push(entry);
-    var feed = $('#chatFeed');
-    if (feed) {
-      var div = document.createElement('div');
-      div.className = 'chat-msg ' + (entry.correct ? 'correct' : 'wrong');
-      div.innerHTML = '<span><b>' + esc(entry.by) + ':</b> ' + esc(entry.text) + '</span><span>' + (entry.correct ? '✅ +25' : '❌') + '</span>';
-      feed.appendChild(div);
-      feed.scrollTop = feed.scrollHeight;
-    }
-    if (!entry.correct) {
-      Audio.playTick(false);
+    if (state.screen === 'game' && Scribble && Scribble.handleIncomingGuessFeed) {
+      Scribble.handleIncomingGuessFeed(entry);
+    } else {
+      state.game.chat.push(entry);
+      if (Scribble && Scribble.updateChatFeedDOM) Scribble.updateChatFeedDOM();
+      if (!entry.correct) {
+        Audio.playTick(false);
+      }
     }
   });
 
   Net.on('GUESS_MATCHED', function (payload) {
     if (!state.game || state.game.solved || state.game.isTransitioning) return;
-    state.game.solved = true;
-    if (payload.scores) {
-      state.game.scores = payload.scores;
+    if (state.screen === 'game' && Scribble && Scribble.handleIncomingMatch) {
+      Scribble.handleIncomingMatch(payload);
     } else {
-      state.game.scores[payload.guesserIndex] += 25;
-      state.game.scores[1 - payload.guesserIndex] += 15;
-    }
-    state.game.chat.push({ by: payload.by, text: payload.word, correct: true });
-    Audio.playMatch();
-    burstCenter(30);
-    toast('🎉 ' + payload.by + ' ne sahi pehchana! +25 pts');
+      state.game.solved = true;
+      if (payload.scores) {
+        state.game.scores = payload.scores;
+      } else {
+        state.game.scores[payload.guesserIndex] += 25;
+        state.game.scores[1 - payload.guesserIndex] += 15;
+      }
+      state.game.chat.push({ by: payload.by, text: payload.word, correct: true });
+      if (Scribble && Scribble.updateChatFeedDOM) Scribble.updateChatFeedDOM();
+      Audio.playMatch();
+      burstCenter(30);
+      toast('🎉 ' + payload.by + ' ne sahi pehchana! +25 pts');
 
-    var blanksRow = $('#blanksRow');
-    if (blanksRow) {
-      blanksRow.innerHTML = '<span style="color:var(--good);font-weight:900;font-size:20px">🎉 ' + esc(payload.word) + '</span>';
-    }
+      var blanksRow = $('#blanksRow');
+      if (blanksRow) {
+        blanksRow.innerHTML = '<span style="color:var(--good);font-weight:900;font-size:20px">🎉 ' + esc(payload.word) + '</span>';
+      }
 
-    if (Net.isHostUser() && Scribble && Scribble.scheduleNextTurn) {
-      Scribble.scheduleNextTurn(2400);
+      if (Net.isHostUser() && Scribble && Scribble.scheduleNextTurn) {
+        Scribble.scheduleNextTurn(2400);
+      }
     }
   });
 
@@ -1455,6 +1491,53 @@
       if (Scribble && Scribble.handleGuesserHintClick) {
         Scribble.handleGuesserHintClick();
       }
+    } else if (action === 'exitScribbleGame') {
+      Audio.playTap();
+      if (state.game && state.game.isSolo) {
+        if (Scribble && Scribble.stopMatchTimer) Scribble.stopMatchTimer();
+        state.game = null;
+        state.screen = 'lobby';
+        render();
+      } else {
+        state.modal = 'confirm_exit_scribble';
+        renderModal();
+      }
+    } else if (action === 'confirmExitScribble') {
+      Audio.playTap();
+      state.modal = null;
+      if (Scribble && Scribble.stopMatchTimer) Scribble.stopMatchTimer();
+      if (Net.getStatus() === 'connected') {
+        Net.send('PARTNER_LEFT_GAME', { by: profile.name, mode: 'scribble' });
+      }
+      state.game = null;
+      state.screen = (Net.getStatus() === 'connected') ? 'room_ready' : 'lobby';
+      render();
+    } else if (action === 'continueSoloAfterPartnerLeft') {
+      Audio.playTap();
+      state.modal = null;
+      if (Scribble && Scribble.launchSolo) {
+        Scribble.launchSolo();
+      }
+    } else if (action === 'exitToLobbyAfterPartnerLeft') {
+      Audio.playTap();
+      state.modal = null;
+      if (Scribble && Scribble.stopMatchTimer) Scribble.stopMatchTimer();
+      state.game = null;
+      state.screen = (Net.getStatus() === 'connected') ? 'room_ready' : 'lobby';
+      render();
+    } else if (action === 'createNewRoomAfterPartnerLeft') {
+      Audio.playTap();
+      state.modal = null;
+      if (Scribble && Scribble.stopMatchTimer) Scribble.stopMatchTimer();
+      state.game = null;
+      state.screen = 'lobby';
+      render();
+      var crtBtn = document.querySelector('[data-action="createRoom"]');
+      if (crtBtn) crtBtn.click();
+    } else if (action === 'closeChatPopup') {
+      if (Scribble && Scribble.dismissChatPopup) {
+        Scribble.dismissChatPopup();
+      }
     } else if (action === 'installPwa') {
       if (window.deferredInstallPrompt) {
         window.deferredInstallPrompt.prompt();
@@ -1481,12 +1564,34 @@
     }
   });
 
-  /* Service Worker Registration for PWA */
+  /* Service Worker Registration for PWA (Production only, bypass on localhost) */
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js').catch(function () {});
-    });
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      navigator.serviceWorker.getRegistrations().then(function (registrations) {
+        for (var i = 0; i < registrations.length; i++) {
+          registrations[i].unregister();
+        }
+      });
+      if ('caches' in window) {
+        caches.keys().then(function (names) {
+          names.forEach(function (name) { caches.delete(name); });
+        });
+      }
+    } else {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () {});
+      });
+    }
   }
+
+  // Handle unexpected tab close or reload to immediately alert partner
+  window.addEventListener('beforeunload', function () {
+    if (Net.getStatus() === 'connected' && (state.screen === 'game' || state.screen === 'twominds' || state.screen === 'race')) {
+      try {
+        Net.send('PARTNER_LEFT_GAME', { by: profile.name, accidental: true });
+      } catch (e) {}
+    }
+  });
 
   // Initial App Mount
   render();

@@ -13,6 +13,12 @@
 
   function init(appContext) {
     ctx = appContext;
+    if (appContext) {
+      appContext.updateChatFeedDOM = updateChatFeedDOM;
+      appContext.addChatMessage = addChatMessage;
+      appContext.showChatPopup = showChatPopup;
+      appContext.dismissChatPopup = dismissChatPopup;
+    }
   }
 
   function getCtx() {
@@ -552,11 +558,22 @@
     }
 
     // Top Bar
+    var exitBtnLabel = isSolo ? '🚪 Exit' : '🚪 Chhodo';
     var topBarHtml = '<div class="arena-topbar">' +
+      '<button type="button" class="btn-exit-scribble" data-action="exitScribbleGame" title="Game se bahar niklein">' + exitBtnLabel + '</button>' +
       '<span class="role-badge">' + (isDrawer ? '🖌️ Aap Draw Kar Rahe Ho' : '👀 ' + esc(drawerName) + ' Draw Kar Rahe Hain') + '</span>' +
       '<span class="timer-pill" id="timerDisplay">⏱️ 60s</span>' +
       '<span class="live-pill" style="padding:3px 8px">Word ' + turnNumber + '/' + totalTurns + '</span>' +
       '</div>';
+
+    // Partner Offline In-Arena Alert
+    var offlineBannerHtml = '';
+    if (app.state.game && app.state.game.partnerOffline) {
+      offlineBannerHtml = '<div class="partner-offline-strip">' +
+        '<span>⚠️ Partner offline hain. Game ruk gaya hai.</span>' +
+        '<button type="button" class="btn-strip-action" data-action="exitToLobbyAfterPartnerLeft">Lobby Jao 🏠</button>' +
+        '</div>';
+    }
 
     // Banner: Drawer sees only target word (no hint), Guesser sees Category, Diff, Blanks and Clue Hint
     var bannerHtml = '';
@@ -625,33 +642,72 @@
         '</div>';
     }
 
-    // Guesser Input
-    var guessInputHtml = '';
-    if (!isDrawer) {
-      guessInputHtml = '<form class="guess-box" id="guessForm">' +
-        '<input id="guessInput" placeholder="Shabd guess karo yahan..." autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" autofocus>' +
-        '<button class="btn gold" type="submit">Bhejo 🚀</button>' +
-        '</form>';
+    // Floating In-Game WhatsApp Notification Popup
+    var popupHtml = '<div class="scribble-chat-popup" id="scribbleChatPopup" role="alert" style="display:none">' +
+      '<div class="popup-inner">' +
+      '<div class="popup-avatar"><span class="popup-avatar-icon">💬</span></div>' +
+      '<div class="popup-body">' +
+      '<div class="popup-meta">' +
+      '<span class="popup-sender" id="popupSenderName">Partner</span>' +
+      '<span class="popup-time" id="popupTimeText">Abhi</span>' +
+      '</div>' +
+      '<div class="popup-msg" id="popupMsgText">Message</div>' +
+      '</div>' +
+      '<button type="button" class="popup-close-btn" data-action="closeChatPopup" aria-label="Dismiss">✕</button>' +
+      '</div></div>';
+
+    // WhatsApp Style Chat Card (Newest messages at top so no scrolling is needed)
+    var chatList = (app.state.game.chat || []).slice().reverse();
+    var chatFeedHtml = '';
+    if (chatList.length === 0) {
+      chatFeedHtml = '<div class="wa-empty-state">✨ Yahan aap dono ki WhatsApp chat aur guesses aayenge (Naye messages upar)</div>';
+    } else {
+      chatFeedHtml = chatList.map(function (c) {
+        return renderMessageBubbleHtml(c, app.profile.name);
+      }).join('');
     }
 
-    // Chat Feed
-    var chatHtml = '<div class="chat-feed" id="chatFeed">' +
-      (app.state.game.chat || []).slice(-6).map(function (c) {
-        return '<div class="chat-msg ' + (c.correct ? 'correct' : 'wrong') + '">' +
-          '<span><b>' + esc(c.by) + ':</b> ' + esc(c.text) + '</span>' +
-          '<span>' + (c.correct ? '✅ +25' : '❌') + '</span>' +
-          '</div>';
-      }).join('') +
+    var placeholderText = isDrawer
+      ? 'Partner ko cheer ya hint likhein (Answer mat batayein)...'
+      : 'Shabd guess karo ya chat likhein...';
+    var sendBtnIcon = isDrawer ? '💬' : '🚀';
+    var inputAutocap = isDrawer ? 'sentences' : 'characters';
+
+    var chatSectionHtml = '<div class="scribble-chat-card">' +
+      '<div class="wa-chat-header">' +
+      '<div class="wa-header-left">' +
+      '<span class="wa-online-dot"></span>' +
+      '<span class="wa-header-title">💬 Jodi Sync Chat &amp; Guesses</span>' +
+      '</div>' +
+      '<span class="wa-header-badge">⚡ Naye messages upar</span>' +
+      '</div>' +
+      '<div class="chat-feed wa-feed" id="chatFeed">' +
+      chatFeedHtml +
+      '</div>' +
+      '<div class="wa-quick-row">' +
+      '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="🔥 Garam!">🔥 Garam!</button>' +
+      '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="❄️ Thanda!">❄️ Thanda</button>' +
+      '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="👏 Sahi ja rahe!">👏 Sahi ja rahe</button>' +
+      '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="😂 Haha!">😂 Haha</button>' +
+      '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="❤️">❤️ Love</button>' +
+      '</div>' +
+      '<form class="guess-box wa-input-box" id="guessForm">' +
+      '<input id="guessInput" placeholder="' + esc(placeholderText) + '" autocomplete="off" autocapitalize="' + inputAutocap + '" autocorrect="off" spellcheck="false">' +
+      '<button class="btn gold wa-send-btn" type="submit" title="Bhejo">' +
+      '<span class="send-icon">' + sendBtnIcon + '</span>' +
+      '</button>' +
+      '</form>' +
       '</div>';
 
-    return '<section class="screen" style="padding-bottom:10px">' +
+    return '<section class="screen scribble-arena-screen" style="padding-bottom:10px">' +
+      popupHtml +
+      offlineBannerHtml +
       soloBarHtml +
       topBarHtml +
       bannerHtml +
       canvasHtml +
       toolsHtml +
-      guessInputHtml +
-      chatHtml +
+      chatSectionHtml +
       '</section>';
   }
 
@@ -697,7 +753,238 @@
       '</div></div></section>';
   }
 
-  /* Guess Form Binding */
+  /* WhatsApp Style Chat Helpers & Logic */
+  function getMsgTime(d) {
+    var date = d ? new Date(d) : new Date();
+    var h = date.getHours();
+    var m = date.getMinutes();
+    return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  }
+
+  function renderMessageBubbleHtml(c, myName) {
+    var isMe = c.isMe || (c.by === myName);
+    var timeStr = c.time || getMsgTime();
+
+    if (c.type === 'system' || (c.correct === true && c.text)) {
+      return '<div class="wa-msg-row is-system" data-id="' + esc(c.id || '') + '">' +
+        '<div class="wa-bubble is-system">' +
+          '<span>🎉 <b>' + esc(c.by || 'Partner') + '</b> ne sahi guess kiya: <b>' + esc(c.text) + '</b> (+25 pts)</span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    var rowCls = isMe ? 'is-me' : 'is-partner';
+    var senderTitle = '';
+    if (!isMe) {
+      senderTitle = '<div class="wa-sender-title">' +
+        esc(c.by || 'Partner') +
+        (c.isDrawer ? ' <span style="font-weight:600;font-size:10px">(Drawer 🖌️)</span>' : '') +
+      '</div>';
+    }
+
+    var badgeHtml = '';
+    if (c.correct === false) {
+      badgeHtml = '<span class="wa-badge wrong" title="Galat Guess">❌ Guess</span>';
+    } else if (c.isDrawer) {
+      badgeHtml = '<span class="wa-badge drawer">🖌️ Hint</span>';
+    } else if (c.type === 'reaction') {
+      badgeHtml = '<span class="wa-badge reaction">✨</span>';
+    }
+
+    var metaHtml = '<div class="wa-meta">' +
+      '<span class="wa-time">' + esc(timeStr) + '</span>' +
+      (isMe ? '<span class="wa-ticks" title="Delivered">✓✓</span>' : '') +
+    '</div>';
+
+    return '<div class="wa-msg-row ' + rowCls + '" data-id="' + esc(c.id || '') + '">' +
+      '<div class="wa-bubble ' + rowCls + '">' +
+        senderTitle +
+        '<div class="wa-content">' +
+          '<span class="wa-text">' + esc(c.text) + '</span>' +
+          badgeHtml +
+          metaHtml +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  var popupTimer = null;
+  function showChatPopup(entry) {
+    var popup = $('#scribbleChatPopup');
+    if (!popup) return;
+
+    var senderEl = $('#popupSenderName');
+    var timeEl = $('#popupTimeText');
+    var msgEl = $('#popupMsgText');
+    var Audio = global.JodiAudio;
+
+    var sender = entry.by || 'Partner';
+    var isCorrect = entry.correct === true;
+    var isWrong = entry.correct === false;
+    var isDrawer = !!entry.isDrawer;
+
+    if (senderEl) {
+      if (isCorrect) {
+        senderEl.textContent = '🎉 ' + sender + ' (Sahi Guess!)';
+      } else if (isDrawer) {
+        senderEl.textContent = '🖌️ ' + sender + ' (Drawer)';
+      } else {
+        senderEl.textContent = '💬 ' + sender;
+      }
+    }
+
+    if (timeEl) timeEl.textContent = entry.time || 'Abhi';
+
+    if (msgEl) {
+      if (isCorrect) {
+        msgEl.innerHTML = '<span style="color:var(--good);font-weight:800">🎉 Sahi shabd: ' + esc(entry.text) + ' (+25 pts)</span>';
+      } else if (isWrong) {
+        msgEl.innerHTML = '<span>Guess: <b>' + esc(entry.text) + '</b> <span class="popup-badge-wrong">❌</span></span>';
+      } else {
+        msgEl.innerHTML = '<span>' + esc(entry.text) + '</span>';
+      }
+    }
+
+    if (isCorrect) {
+      popup.style.borderLeftColor = 'var(--good)';
+    } else if (isWrong) {
+      popup.style.borderLeftColor = 'var(--bad)';
+    } else {
+      popup.style.borderLeftColor = '#25D366';
+    }
+
+    popup.style.display = 'flex';
+    void popup.offsetWidth;
+    popup.classList.add('is-visible');
+
+    if (Audio) {
+      if (isCorrect) Audio.playMatch();
+      else if (isWrong) Audio.playTick(false);
+      else Audio.playPop();
+    }
+
+    if (popupTimer) clearTimeout(popupTimer);
+    popupTimer = setTimeout(function () {
+      dismissChatPopup();
+    }, 3600);
+  }
+
+  function dismissChatPopup() {
+    var popup = $('#scribbleChatPopup');
+    if (!popup) return;
+    popup.classList.remove('is-visible');
+    if (popupTimer) {
+      clearTimeout(popupTimer);
+      popupTimer = null;
+    }
+    setTimeout(function () {
+      if (!popup.classList.contains('is-visible')) {
+        popup.style.display = 'none';
+      }
+    }, 300);
+  }
+
+  function addChatMessage(entry, isOutgoing) {
+    var app = getCtx();
+    if (!app.state || !app.state.game) return;
+    if (!app.state.game.chat) app.state.game.chat = [];
+
+    if (!entry.id) entry.id = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    if (!entry.time) entry.time = getMsgTime();
+    if (isOutgoing) entry.isMe = true;
+
+    // Check if duplicate entry already present
+    var alreadyExists = app.state.game.chat.some(function (c) { return c.id && c.id === entry.id; });
+    if (!alreadyExists) {
+      app.state.game.chat.push(entry);
+    }
+
+    var feed = $('#chatFeed');
+    if (feed) {
+      var emptyEl = feed.querySelector('.wa-empty-state');
+      if (emptyEl) emptyEl.remove();
+
+      var temp = document.createElement('div');
+      temp.innerHTML = renderMessageBubbleHtml(entry, app.profile.name);
+      var rowEl = temp.firstElementChild;
+      if (rowEl) {
+        rowEl.classList.add('anim-enter');
+        feed.insertBefore(rowEl, feed.firstChild);
+        feed.scrollTop = 0;
+      }
+    }
+
+    // Show popup notification if incoming message from partner
+    if (!isOutgoing && entry.by !== app.profile.name) {
+      showChatPopup(entry);
+    }
+  }
+
+  function updateChatFeedDOM() {
+    var app = getCtx();
+    var feed = $('#chatFeed');
+    if (!feed || !app.state || !app.state.game) return;
+
+    var chatList = (app.state.game.chat || []).slice().reverse();
+    if (chatList.length === 0) {
+      feed.innerHTML = '<div class="wa-empty-state">✨ Yahan aap dono ki WhatsApp chat aur guesses aayenge (Naye messages upar)</div>';
+    } else {
+      feed.innerHTML = chatList.map(function (c) {
+        return renderMessageBubbleHtml(c, app.profile.name);
+      }).join('');
+    }
+    feed.scrollTop = 0;
+  }
+
+  function handleIncomingGuessFeed(entry) {
+    var app = getCtx();
+    if (!app.state || !app.state.game) return;
+    addChatMessage(entry, false);
+    if (!entry.correct) {
+      var Audio = global.JodiAudio;
+      if (Audio) Audio.playTick(false);
+    }
+  }
+
+  function handleIncomingMatch(payload) {
+    var app = getCtx();
+    var Audio = global.JodiAudio;
+    var Net = global.JodiNet;
+    if (!app.state || !app.state.game || app.state.game.solved || app.state.game.isTransitioning) return;
+
+    app.state.game.solved = true;
+    if (payload.scores) {
+      app.state.game.scores = payload.scores;
+    } else {
+      var gIdx = payload.guesserIndex || 0;
+      app.state.game.scores[gIdx] += 25;
+      app.state.game.scores[1 - gIdx] += 15;
+    }
+
+    var winEntry = {
+      by: payload.by,
+      text: payload.word,
+      correct: true,
+      type: 'guess',
+      time: getMsgTime()
+    };
+    addChatMessage(winEntry, false);
+
+    if (Audio) Audio.playMatch();
+    if (app.burstCenter) app.burstCenter(30);
+    if (app.toast) app.toast('🎉 ' + payload.by + ' ne sahi pehchana! +25 pts');
+
+    var blanksRow = $('#blanksRow');
+    if (blanksRow) {
+      blanksRow.innerHTML = '<span style="color:var(--good);font-weight:900;font-size:20px">🎉 ' + esc(payload.word) + '</span>';
+    }
+
+    if (Net.isHostUser() && scheduleNextTurn) {
+      scheduleNextTurn(2400);
+    }
+  }
+
+  /* Guess & Chat Form Binding (Handles both Guesser guesses & Drawer banter/hints) */
   function bindGuessForm() {
     var form = $('#guessForm');
     if (!form) return;
@@ -710,27 +997,86 @@
       var Net = global.JodiNet;
       var Audio = global.JodiAudio;
 
-      if (!val || !app.state.game || app.state.game.solved || app.state.game.isTransitioning) return;
+      if (!val || !app.state.game || app.state.game.isTransitioning) return;
       input.value = '';
 
-      var curWord = getCurrentWord().word;
-      var cleanGuess = val.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      var cleanTarget = curWord.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      var isMatch = cleanGuess === cleanTarget;
-
+      var isSolo = app.state.game.isSolo;
       var isHost = Net.isHostUser();
+      var turn = app.state.game.turnIndex % 2;
+      var isDrawer = isSolo
+        ? (app.state.game.soloRole !== 'guesser')
+        : ((turn === 0 && isHost) || (turn === 1 && !isHost));
+
+      var curWordObj = getCurrentWord();
+      var curWord = curWordObj.word;
+      var cleanTarget = curWord.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+      // Case 1: DRAWER IS SENDING CHAT / HINT / CHEER
+      if (isDrawer) {
+        var cleanInput = val.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (cleanInput.indexOf(cleanTarget) !== -1 || (cleanTarget.length >= 4 && levenshteinDistance(cleanInput, cleanTarget) <= 1)) {
+          if (Audio) Audio.playTick(false);
+          if (app.toast) app.toast('⚠️ Aap drawer ho! Secret word partner ko mat batao 😉');
+          return;
+        }
+
+        var drawerEntry = {
+          by: app.profile.name,
+          text: val,
+          correct: null,
+          isDrawer: true,
+          type: 'chat',
+          time: getMsgTime()
+        };
+
+        addChatMessage(drawerEntry, true);
+        if (Audio) Audio.playPop();
+
+        if (!isSolo && Net.getStatus() === 'connected') {
+          Net.send('GUESS_FEED', drawerEntry);
+        }
+        return;
+      }
+
+      // Case 2: GUESSER IS SENDING GUESS / CHAT
+      if (app.state.game.solved) {
+        var casualEntry = {
+          by: app.profile.name,
+          text: val,
+          correct: null,
+          isDrawer: false,
+          type: 'chat',
+          time: getMsgTime()
+        };
+        addChatMessage(casualEntry, true);
+        if (!isSolo && Net.getStatus() === 'connected') {
+          Net.send('GUESS_FEED', casualEntry);
+        }
+        return;
+      }
+
+      var cleanGuess = val.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      var isMatch = cleanGuess === cleanTarget;
       var myIndex = isHost ? 0 : 1;
 
       if (isMatch) {
         app.state.game.solved = true;
-        if (!app.state.game.isSolo) {
+        if (!isSolo) {
           app.state.game.scores[myIndex] += 25;
           app.state.game.scores[1 - myIndex] += 15;
         } else {
           app.state.game.scores[0] += 25;
         }
-        app.state.game.chat.push({ by: app.profile.name, text: curWord, correct: true });
-        if (app.updateChatFeedDOM) app.updateChatFeedDOM();
+
+        var matchEntry = {
+          by: app.profile.name,
+          text: curWord,
+          correct: true,
+          type: 'guess',
+          time: getMsgTime()
+        };
+
+        addChatMessage(matchEntry, true);
         if (Audio) Audio.playMatch();
         if (app.burstCenter) app.burstCenter(30);
         if (app.toast) app.toast('🎉 Sahi pehchana! ' + curWord + ' (+25 pts)');
@@ -745,7 +1091,7 @@
           updateBlanksDOM();
         }
 
-        if (!app.state.game.isSolo && Net.getStatus() === 'connected') {
+        if (!isSolo && Net.getStatus() === 'connected') {
           Net.send('GUESS_MATCHED', {
             word: curWord,
             by: app.profile.name,
@@ -754,19 +1100,25 @@
           });
         }
 
-        // Host in multiplayer or Solo immediately advances turn
-        if (isHost || app.state.game.isSolo) {
+        if (isHost || isSolo) {
           scheduleNextTurn(2200);
         }
       } else {
-        var entry = { by: app.profile.name, text: val, correct: false };
-        app.state.game.chat.push(entry);
-        if (app.updateChatFeedDOM) app.updateChatFeedDOM();
-        if (!app.state.game.isSolo && Net.getStatus() === 'connected') {
-          Net.send('GUESS_FEED', entry);
+        var wrongEntry = {
+          by: app.profile.name,
+          text: val,
+          correct: false,
+          type: 'guess',
+          time: getMsgTime()
+        };
+
+        addChatMessage(wrongEntry, true);
+
+        if (!isSolo && Net.getStatus() === 'connected') {
+          Net.send('GUESS_FEED', wrongEntry);
         }
 
-        // Close guess detection for extra hint/encouragement
+        // Close guess detection for encouragement
         var dist = levenshteinDistance(cleanGuess, cleanTarget);
         var isClose = (cleanTarget.length >= 4 && dist === 1) || (cleanTarget.length >= 7 && dist <= 2);
         if (isClose) {
@@ -775,8 +1127,84 @@
         } else {
           if (Audio) Audio.playTick(false);
         }
+
+        if (isSolo) {
+          setTimeout(function () {
+            if (!app.state.game || app.state.game.solved) return;
+            var aiText = isClose 
+              ? '🔥 Arre bohot paas ho! Socho thoda sa aur!' 
+              : (dist <= 3 ? 'Thoda sa aur socho! Hint button bhi check karo 💡' : 'Nahi nahi, drawing ko dhyan se dekho 🎨');
+            var aiEntry = {
+              by: 'AI Partner',
+              text: aiText,
+              correct: null,
+              isDrawer: true,
+              type: 'chat',
+              time: getMsgTime()
+            };
+            addChatMessage(aiEntry, false);
+          }, 900);
+        }
       }
     };
+
+    // Bind Quick Reaction Chips
+    var chips = document.querySelectorAll('.wa-chip');
+    chips.forEach(function (chip) {
+      chip.onclick = function (e) {
+        e.preventDefault();
+        var val = chip.getAttribute('data-val') || chip.textContent;
+        var app = getCtx();
+        var Net = global.JodiNet;
+        var Audio = global.JodiAudio;
+        if (!app.state || !app.state.game) return;
+
+        var isSolo = app.state.game.isSolo;
+        var isHost = Net.isHostUser();
+        var turn = app.state.game.turnIndex % 2;
+        var isDrawer = isSolo
+          ? (app.state.game.soloRole !== 'guesser')
+          : ((turn === 0 && isHost) || (turn === 1 && !isHost));
+
+        var entry = {
+          by: app.profile.name,
+          text: val,
+          correct: null,
+          isDrawer: isDrawer,
+          type: 'reaction',
+          time: getMsgTime()
+        };
+
+        addChatMessage(entry, true);
+        if (Audio) Audio.playPop();
+
+        if (!isSolo && Net.getStatus() === 'connected') {
+          Net.send('GUESS_FEED', entry);
+        }
+      };
+    });
+
+    // Bind Popup events
+    var popupClose = $('[data-action="closeChatPopup"]');
+    if (popupClose) {
+      popupClose.onclick = function (e) {
+        e.stopPropagation();
+        dismissChatPopup();
+      };
+    }
+
+    var popupEl = $('#scribbleChatPopup');
+    if (popupEl) {
+      popupEl.onclick = function () {
+        var feed = $('#chatFeed');
+        if (feed) {
+          feed.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          feed.classList.add('feed-highlight');
+          setTimeout(function () { feed.classList.remove('feed-highlight'); }, 700);
+        }
+        dismissChatPopup();
+      };
+    }
   }
 
   /* Solo Scribble Practice Mode Launcher */
@@ -836,6 +1264,13 @@
     vGame: vGame,
     vResults: vResults,
     bindGuessForm: bindGuessForm,
-    launchSolo: launchSolo
+    launchSolo: launchSolo,
+    addChatMessage: addChatMessage,
+    showChatPopup: showChatPopup,
+    dismissChatPopup: dismissChatPopup,
+    updateChatFeedDOM: updateChatFeedDOM,
+    handleIncomingGuessFeed: handleIncomingGuessFeed,
+    handleIncomingMatch: handleIncomingMatch,
+    renderMessageBubbleHtml: renderMessageBubbleHtml
   };
 })(window);
