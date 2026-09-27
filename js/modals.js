@@ -23,7 +23,18 @@
       return;
     }
 
-    if (state.modal === 'confirm_exit_scribble') {
+    if (state.modal === 'confirm_exit_race') {
+      m.innerHTML = '<div class="modal-sheet" style="text-align:center">' +
+        '<div style="font-size:38px;margin-bottom:6px">🏍️💨</div>' +
+        '<h2 style="font-family:var(--font-display);font-size:22px;color:var(--plum);margin-bottom:6px">Race Chhodein?</h2>' +
+        '<p style="color:var(--soft);font-size:13.5px;margin-bottom:14px;line-height:1.4">Kya aap 3D race chhodkar bahar jaana chahte hain?</p>' +
+        '<div style="display:flex;flex-direction:column;gap:8px">' +
+        '<button type="button" class="btn bad" data-action="confirmExitRace">Haan, Race Chhodo 🚪</button>' +
+        '<button type="button" class="btn ghost" data-action="closeModal">Nahi, Race Karte Raho 🏍️</button>' +
+        '</div></div>';
+      m.className = 'on';
+      return;
+    } else if (state.modal === 'confirm_exit_scribble') {
       m.innerHTML = '<div class="modal-sheet" style="text-align:center">' +
         '<div style="font-size:38px;margin-bottom:6px">🚪</div>' +
         '<h2 style="font-family:var(--font-display);font-size:22px;color:var(--plum);margin-bottom:6px">Game Chhodein?</h2>' +

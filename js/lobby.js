@@ -106,7 +106,12 @@
           '<h2 style="font-family:var(--font-display);font-size:24px;color:var(--plum)">Room Join Karo</h2>' +
           '<p style="color:var(--soft);font-size:14px;margin-bottom:12px">Partner ne code share kiya hai? Code daal kar unke room mein jud jao.</p>' +
           '<button class="btn alt" data-action="openJoinModal">Code Daalo 📲</button>' +
-          '</div></div>'
+          '</div>' +
+          '<div class="card elevated" style="background:#FFFBF3;border-color:var(--genda)">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+          '<div><div style="font-weight:900;color:var(--plum);font-size:15px">🏍️ Solo 3D Race Mode</div><div style="font-size:12.5px;color:var(--soft)">AI racer ke khilaaf abhi test drive karein</div></div>' +
+          '<button class="btn gold sm" data-action="soloPracticeRace">Play 🏁</button>' +
+          '</div></div></div>'
         : '') +
       '</section>';
   }

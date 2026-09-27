@@ -15,7 +15,11 @@
   /* ================= TUNING ================= */
   var MODEL_FORWARD_SIGN = 1;      // +1: bike nose = model +Z (default) | -1: nose = model -Z
   var LANE_WIDTH = 6;              // metres per 1.0 of lateralOffset
-  var LATERAL_LIMIT = 0.85;
+  var ROAD_ASPHALT_LIMIT = 1.15;   // ~6.9m, edges of smooth asphalt
+  var KERB_LIMIT = 1.40;           // ~8.4m, outer edge of rumble strip
+  var SHOULDER_LIMIT = 1.55;       // ~9.3m, outer edge of gravel shoulder / barrier line
+  var BARRIER_LIMIT = 1.68;        // ~10.0m, hard barrier wall
+  var LATERAL_LIMIT = BARRIER_LIMIT;
   var MAX_BANK = 0.45;             // rad, max lean into a turn
   var MAX_FORK = 0.45;             // rad, max handlebar angle
   var TILT_DEADZONE_DEG = 3.2;     // gyroscope deadzone
@@ -152,6 +156,32 @@
   var _lookSmooth = new THREE.Vector3();
   var _tmpV = new THREE.Vector3();
   var _tmpX = new THREE.Vector3();
+  var _tan0 = new THREE.Vector3();
+  var _tan1 = new THREE.Vector3();
+  var _deltaTan = new THREE.Vector3();
+  var _lvlCurv = new THREE.Vector3();
+  var cameraShakeTrauma = 0;
+
+  function triggerCameraShake(amount) {
+    cameraShakeTrauma = Math.min(0.85, cameraShakeTrauma + (amount || 0.2));
+  }
+
+  function getRoadCurvature(progress, lookaheadMeters) {
+    if (!trackCurve || !curveLength) return 0;
+    var ds = lookaheadMeters || 3.0;
+    var u0 = wrap01(progress);
+    var u1 = wrap01(progress + ds / curveLength);
+    trackCurve.getTangentAt(u0, _tan0);
+    trackCurve.getTangentAt(u1, _tan1);
+    var tl0 = _tan0.length(); if (tl0 > 1e-8) _tan0.multiplyScalar(1 / tl0);
+    var tl1 = _tan1.length(); if (tl1 > 1e-8) _tan1.multiplyScalar(1 / tl1);
+    _deltaTan.subVectors(_tan1, _tan0);
+
+    _lvlCurv.crossVectors(WORLD_UP, _tan0);
+    var lenH = _lvlCurv.length();
+    if (lenH > 1e-8) _lvlCurv.multiplyScalar(1 / lenH); else perpendicularTo(_tan0, _lvlCurv);
+    return _deltaTan.dot(_lvlCurv) / ds; // + = left turn, - = right turn
+  }
 
   function makeFrame() {
     return {
@@ -437,6 +467,38 @@
       if (el._jrV !== txt) { el._jrV = txt; el.textContent = txt; }
       if (el._jrC !== col) { el._jrC = col; el.style.color = col; }
     }
+
+    // Upcoming corner warning indicator
+    var lookDist = Math.max(24, Math.abs(p.speed) * 0.95);
+    var aheadCurv = getRoadCurvature(p.trackProgress, lookDist);
+    updateTurnWarningHUD(aheadCurv, p.speed);
+  }
+
+  function updateTurnWarningHUD(k, speed) {
+    var el = hudEl('raceTurnIndicator');
+    if (!el) return;
+    var absK = Math.abs(k);
+    if (absK > 0.012 && speed > 16) {
+      var needBrake = speed > 30;
+      var turnClass = k > 0 ? 'left' : 'right';
+      var txt = needBrake
+        ? (k > 0 ? '⚠️ BRAKE & TURN ◀◀' : '⚠️ BRAKE & TURN ▶▶')
+        : (k > 0 ? '◀◀ TURN LEFT' : 'TURN RIGHT ▶▶');
+      if (el._jrTxt !== txt) {
+        el._jrTxt = txt;
+        el.textContent = txt;
+      }
+      var cls = 'race-turn-indicator show ' + turnClass + (needBrake ? ' brake' : '');
+      if (el._jrCls !== cls) {
+        el._jrCls = cls;
+        el.className = cls;
+      }
+    } else {
+      if (el._jrCls !== 'race-turn-indicator') {
+        el._jrCls = 'race-turn-indicator';
+        el.className = 'race-turn-indicator';
+      }
+    }
   }
 
   /* ================= 3D COLLISION SPARKS ================= */
@@ -529,6 +591,8 @@
     if (down) {
       p.speed *= Math.max(0, 1 - 8 * delta);
       p.crashTimer -= delta;
+      // Smoothly return towards track center during wipeout recovery
+      p.lateralOffset += (0 - p.lateralOffset) * damp(3, delta);
       if (p.crashTimer <= 0) {
         p.isCrashed = false;
         p.crashTimer = 0;
@@ -551,11 +615,67 @@
       turnRate = clamp(turnRate + currentTiltSteer, -1, 1);
     }
 
-    var steerStrength = Math.min(1.25, Math.abs(p.speed) / p.maxSpeed) * 1.8;
-    p.lateralOffset = clamp(p.lateralOffset + turnRate * steerStrength * delta, -LATERAL_LIMIT, LATERAL_LIMIT);
+    // Dynamic steering authority: effective at speed
+    var steerStrength = Math.min(1.35, Math.abs(p.speed) / p.maxSpeed) * 2.3;
+
+    // Road curvature at the bike's position (+ = LEFT turn, - = RIGHT turn)
+    var curveRate = getRoadCurvature(p.trackProgress, 3.2);
+
+    // Centrifugal drift: when turning left (curveRate > 0), momentum throws the bike RIGHT (negative lateral)
+    var speedSq = (p.speed * p.speed);
+    var centrifugalDrift = 0;
+    if (!down && Math.abs(p.speed) > 2) {
+      centrifugalDrift = -curveRate * (speedSq / LANE_WIDTH) * 0.52;
+    }
+
+    // Net lateral velocity: player steering + centrifugal drift
+    var netLateralDelta = (turnRate * steerStrength + centrifugalDrift) * delta;
+
+    if (!down) {
+      p.lateralOffset += netLateralDelta;
+    }
+
+    var absLat = Math.abs(p.lateralOffset);
+    var side = p.lateralOffset >= 0 ? 1 : -1;
+
+    // ---- Road Surface & Boundary Collision Physics ----
+    if (!down) {
+      if (absLat > ROAD_ASPHALT_LIMIT && absLat <= KERB_LIMIT) {
+        // Kerb / Rumble strip: audio/vibration + light scrubbing
+        triggerCameraShake(0.04 * (p.speed / p.maxSpeed));
+        p.speed = Math.max(0, p.speed - 6.0 * delta);
+        if (Math.random() < 0.25 && p.speed > 16) {
+          burstSparks(_tmpV.copy(playerFrame.pos).addScaledVector(playerFrame.left, -side * 0.3));
+        }
+      } else if (absLat > KERB_LIMIT && absLat < SHOULDER_LIMIT) {
+        // Rough dirt / gravel shoulder: heavy drag + camera shake
+        triggerCameraShake(0.12 * (p.speed / p.maxSpeed));
+        p.speed = Math.max(0, p.speed - 24.0 * delta);
+        if (Math.random() < 0.3) {
+          burstSparks(playerFrame.pos);
+        }
+      } else if (absLat >= SHOULDER_LIMIT && p.collisionCooldown <= 0) {
+        // Outer Side Road Barrier / Tyre Wall Hit!
+        var isViolent = (p.speed > 14) || (turnRate * side > 0.05) || (Math.abs(centrifugalDrift) > 1.2);
+        if (isViolent) {
+          triggerWallCrash(side);
+        } else {
+          // Low-speed glancing wall scrape: bounce off inward
+          p.lateralOffset = side * (SHOULDER_LIMIT - 0.06);
+          p.speed = Math.max(0, p.speed - 36.0 * delta);
+          p.tiltAngle = -side * 0.3;
+          triggerCameraShake(0.18);
+          burstSparks(_tmpV.copy(playerFrame.pos).addScaledVector(playerFrame.left, side * 0.4));
+          if (window.JodiAudio && typeof window.JodiAudio.buzz === 'function') window.JodiAudio.buzz(25);
+        }
+      }
+    }
+
+    p.lateralOffset = clamp(p.lateralOffset, -LATERAL_LIMIT, LATERAL_LIMIT);
 
     // Lean into the corner and turn the handlebar the same way (both LEFT = +)
     var targetLean = turnRate * MAX_BANK * Math.min(1, Math.abs(p.speed) / 15);
+    targetLean += clamp(-curveRate * 12, -0.22, 0.22);
     p.tiltAngle += (targetLean - p.tiltAngle) * damp(8, delta);
     p.steerAngle += (turnRate * MAX_FORK - p.steerAngle) * damp(14, delta);
 
@@ -616,6 +736,15 @@
       camera.position.lerp(_camPos, damp(8, delta));
       _lookSmooth.lerp(_camLook, damp(14, delta));
     }
+
+    if (cameraShakeTrauma > 0.001) {
+      var shake = cameraShakeTrauma * cameraShakeTrauma;
+      camera.position.x += (Math.random() - 0.5) * shake * 2.2;
+      camera.position.y += (Math.random() - 0.5) * shake * 1.5;
+      camera.position.z += (Math.random() - 0.5) * shake * 2.2;
+      cameraShakeTrauma = Math.max(0, cameraShakeTrauma - delta * 2.2);
+    }
+
     camera.lookAt(_lookSmooth);
 
     var targetFov = BASE_FOV + (p.isNitro ? 9 : 0);
@@ -727,6 +856,27 @@
     banner.className = 'race-takedown-banner show ' + kind;
     if (bannerTimer) clearTimeout(bannerTimer);
     bannerTimer = setTimeout(function () { banner.className = 'race-takedown-banner'; bannerTimer = null; }, 2200);
+  }
+
+  function triggerWallCrash(side) {
+    var p = bikePhysics;
+    p.collisionCooldown = 3.5;
+    p.isCrashed = true;
+    p.crashTimer = CRASH_DURATION;
+    p.crashSide = -side;
+    p.isNitro = false;
+    p.speed = 0;
+    p.nitroFuel = Math.max(0, p.nitroFuel - 25);
+    p.lateralOffset = side * (KERB_LIMIT * 0.7);
+
+    if (window.JodiAudio) {
+      if (typeof window.JodiAudio.playCrash === 'function') window.JodiAudio.playCrash();
+      if (typeof window.JodiAudio.buzz === 'function') window.JodiAudio.buzz([120, 60, 200]);
+    }
+    triggerCameraShake(0.65);
+    burstSparks(playerFrame.pos);
+
+    showBanner('wall', '💥 WALL CRASH!', 'Side road barrier se takkar! Respawning... ⏳');
   }
 
   function triggerTakedown(rammer, victim, isFromNetwork) {
@@ -1197,6 +1347,7 @@
     currentTiltSteer = 0;
 
     if (bannerTimer) { clearTimeout(bannerTimer); bannerTimer = null; }
+    cameraShakeTrauma = 0;
 
     disposeScene(scene);
     if (renderer) {

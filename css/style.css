@@ -1479,7 +1479,54 @@ html, body {
 }
 
 /* Dark Mode Overrides for WhatsApp Chat */
-:root[data-theme="dark"] .chat-feed.wa-feed,
+:root[data-theme="dark"] .chat-feed.wa-feed {
+  background-color: #0b141a;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+}
+:root[data-theme="dark"] .wa-empty-state {
+  background: rgba(18, 27, 34, 0.75);
+  color: #8696a0;
+}
+:root[data-theme="dark"] .wa-bubble.is-me {
+  background: #005C4B;
+  color: #E9EDEF;
+  border-color: rgba(255, 255, 255, 0.05);
+}
+:root[data-theme="dark"] .wa-bubble.is-me .wa-text {
+  color: #E9EDEF;
+}
+:root[data-theme="dark"] .wa-bubble.is-me .wa-meta {
+  color: #8696A0;
+}
+:root[data-theme="dark"] .wa-bubble.is-partner {
+  background: #202C33;
+  color: #E9EDEF;
+  border-color: rgba(255, 255, 255, 0.05);
+}
+:root[data-theme="dark"] .wa-bubble.is-partner .wa-text {
+  color: #E9EDEF;
+}
+:root[data-theme="dark"] .wa-bubble.is-partner .wa-meta {
+  color: #8696A0;
+}
+:root[data-theme="dark"] .wa-bubble.is-system {
+  background: #342810;
+  border-color: #634C1A;
+  color: #FFE599;
+}
+:root[data-theme="dark"] .wa-sender-title {
+  color: #38C7C1;
+}
+:root[data-theme="dark"] .scribble-chat-popup {
+  background: #170A26;
+}
+:root[data-theme="dark"] .popup-sender {
+  color: #FBF1E4;
+}
+:root[data-theme="dark"] .popup-msg {
+  color: #FBF1E4;
+}
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .chat-feed.wa-feed {
     background-color: #0b141a;
@@ -2206,6 +2253,78 @@ html, body {
   margin-top: 4px;
 }
 
+.race-takedown-banner.wall {
+  background: rgba(45, 12, 12, 0.95);
+  border: 3px solid #FF5252;
+  box-shadow: 0 0 35px rgba(255, 82, 82, 0.85);
+}
+
+.race-takedown-banner.wall .takedown-title {
+  font-family: var(--font-display);
+  font-size: 30px;
+  color: #FF5252;
+  text-shadow: 2px 2px 0 #000;
+  line-height: 1;
+}
+
+.race-takedown-banner.wall .takedown-sub {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #fff;
+  margin-top: 4px;
+}
+
+/* Dynamic Corner Turn & Brake Warning Indicator */
+.race-turn-indicator {
+  position: absolute;
+  top: 19%;
+  left: 50%;
+  transform: translateX(-50%) scale(0.85);
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  pointer-events: none;
+  z-index: 80;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  white-space: nowrap;
+}
+
+.race-turn-indicator.show {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.race-turn-indicator.left {
+  background: rgba(214, 36, 110, 0.92);
+  color: #fff;
+  border: 2px solid #FF80AB;
+  box-shadow: 0 0 20px rgba(214, 36, 110, 0.7);
+}
+
+.race-turn-indicator.right {
+  background: rgba(11, 122, 124, 0.92);
+  color: #fff;
+  border: 2px solid #38E1E4;
+  box-shadow: 0 0 20px rgba(56, 225, 228, 0.7);
+}
+
+.race-turn-indicator.brake {
+  background: rgba(220, 38, 38, 0.95);
+  color: #fff;
+  border: 2px solid #FCA5A5;
+  box-shadow: 0 0 25px rgba(220, 38, 38, 0.85);
+  animation: pulse-brake 0.6s infinite alternate;
+}
+
+@keyframes pulse-brake {
+  from { transform: translateX(-50%) scale(0.96); }
+  to { transform: translateX(-50%) scale(1.05); }
+}
+
 /* Touch Driving Controls (Bottom Thumb Ergonomics) */
 .race-controls-bottom {
   position: absolute;
@@ -2283,6 +2402,76 @@ html, body {
 @keyframes pulse-nitro {
   0%, 100% { box-shadow: 0 0 10px rgba(56, 225, 228, 0.6); }
   50% { box-shadow: 0 0 20px rgba(56, 225, 228, 0.9); }
+}
+
+@media (max-width: 380px) {
+  .race-controls-bottom {
+    left: 6px;
+    right: 6px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+  }
+  .steer-group, .pedal-group {
+    gap: 6px;
+  }
+  .touch-btn.steer {
+    width: 48px;
+    height: 48px;
+    font-size: 20px;
+  }
+  .touch-btn.gas {
+    width: 58px;
+    height: 58px;
+    font-size: 11px;
+  }
+  .touch-btn.brake {
+    width: 46px;
+    height: 46px;
+    font-size: 10px;
+  }
+  .touch-btn.nitro {
+    width: 46px;
+    height: 46px;
+    font-size: 10px;
+  }
+  .race-hud-top {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+  .speedo-card, .nitro-card {
+    padding: 4px 6px;
+  }
+  .speedo-num {
+    font-size: 18px;
+  }
+  .race-turn-indicator {
+    font-size: 11px;
+    padding: 6px 14px;
+    top: 22%;
+  }
+}
+
+@media (max-height: 640px) {
+  .race-controls-bottom {
+    bottom: 6px;
+  }
+  .touch-btn.steer {
+    width: 48px;
+    height: 48px;
+  }
+  .touch-btn.gas {
+    width: 58px;
+    height: 58px;
+  }
+  .touch-btn.brake, .touch-btn.nitro {
+    width: 46px;
+    height: 46px;
+  }
+  .race-hud-top {
+    top: 6px;
+  }
+  .race-turn-indicator {
+    top: 16%;
+  }
 }
 
 /* Game Mode Toggle Cards in Lobby */

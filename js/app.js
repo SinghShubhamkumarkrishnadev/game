@@ -185,6 +185,12 @@
       state.partnerLeftName = pName;
       state.modal = 'partner_left_scribble';
       render();
+    } else if (state.screen === 'race') {
+      Audio.playMiss();
+      toast('⚠️ ' + pName + ' race se chale gaye. AI racer ne takeover kiya!');
+      if (window.JodiRace && typeof window.JodiRace.setSoloAI === 'function') {
+        window.JodiRace.setSoloAI(true);
+      }
     } else {
       toast('⚠️ ' + pName + ' ne game chhod diya');
     }
@@ -686,6 +692,7 @@
       '<div class="race-lead-pill" id="raceLeadPill">🔥 Barabar</div>' +
       '<div class="race-tilt-badge active" id="raceTiltBadge" title="Phone tilt karke bike turn karein">📱 Tilt Steer: Active</div>' +
       '</div>' +
+      '<div class="race-turn-indicator" id="raceTurnIndicator"></div>' +
       '<div class="race-takedown-banner" id="raceTakedownBanner"></div>' +
       '<div class="race-controls-bottom">' +
       '<div class="steer-group">' +
@@ -693,7 +700,7 @@
       '<button class="touch-btn steer" id="btnSteerR" aria-label="Steer Right">▶</button>' +
       '</div>' +
       '<div class="pedal-group">' +
-      '<button class="touch-btn brake" id="btnBrake">Break</button>' +
+      '<button class="touch-btn brake" id="btnBrake">Brake</button>' +
       '<button class="touch-btn nitro" id="btnNitro">⚡</button>' +
       '<button class="touch-btn gas" id="btnGas">Gas</button>' +
       '</div>' +
@@ -1106,11 +1113,17 @@
       render();
     } else if (action === 'exitRace') {
       Audio.playTap();
+      state.modal = 'confirm_exit_race';
+      renderModal();
+    } else if (action === 'confirmExitRace') {
+      Audio.playTap();
+      state.modal = null;
       if (window.JodiRace) window.JodiRace.cleanup();
-      state.screen = 'room_ready';
       if (Net.getStatus() === 'connected') {
+        Net.send('PARTNER_LEFT_GAME', { by: profile.name, mode: 'race' });
         Net.send('EXIT_RACE', {});
       }
+      state.screen = (Net.getStatus() === 'connected') ? 'room_ready' : 'lobby';
       render();
     } else if (action === 'raceAgain') {
       Audio.playTap();
@@ -1164,6 +1177,12 @@
       if (TwoMindsUI && TwoMindsUI.launchSolo) TwoMindsUI.launchSolo();
     } else if (action === 'soloPracticeScribble') {
       if (Scribble && Scribble.launchSolo) Scribble.launchSolo();
+    } else if (action === 'soloPracticeRace') {
+      Audio.playTap();
+      var sSeed = Math.floor(Math.random() * 9000) + 1000;
+      state.raceTrackSeed = sSeed;
+      state.screen = 'race';
+      render();
     } else if (action === 'twoMindsPlayAgain') {
       Audio.playTap();
       if (state.twoMinds && state.twoMinds.isSolo) {
