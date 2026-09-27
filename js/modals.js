@@ -248,6 +248,15 @@
         '<button type="button" class="btn primary sm" style="width:100%;margin-top:10px" data-action="saveSettingsProfile">💾 Naam Save Karein</button>' +
         '</div>' +
 
+        // Section: Solo 3D Race Mode (AI Demo / Practice)
+        '<div class="settings-card" style="background:#FFFBF3;border-color:var(--genda)">' +
+        '<div class="settings-card-header">' +
+        '<span class="sch-icon">🏍️</span>' +
+        '<div><div class="sch-title">Solo 3D Race Mode</div><div class="sch-desc">AI racer ke khilaaf test drive karein</div></div>' +
+        '</div>' +
+        '<button type="button" class="btn gold sm" style="width:100%" data-action="soloPracticeRace">Play Solo Race 🏁</button>' +
+        '</div>' +
+
         // Section 2: Sound & Audio Toggle
         '<div class="settings-card">' +
         '<div class="settings-card-header">' +

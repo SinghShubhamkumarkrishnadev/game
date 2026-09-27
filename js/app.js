@@ -1179,6 +1179,8 @@
       if (Scribble && Scribble.launchSolo) Scribble.launchSolo();
     } else if (action === 'soloPracticeRace') {
       Audio.playTap();
+      state.modal = null;
+      renderModal();
       var sSeed = Math.floor(Math.random() * 9000) + 1000;
       state.raceTrackSeed = sSeed;
       state.screen = 'race';
