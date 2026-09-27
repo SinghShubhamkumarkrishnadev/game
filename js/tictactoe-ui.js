@@ -46,30 +46,46 @@
     }, 700);
   }
 
-  /* ─── Celebration Modal Reveal Delay State ───
-   * When a player wins, the SVG winning line smoothly slashes across the
-   * winning 3 cells (takes ~0.65s - 0.75s). We hold back the win/lose
-   * popup & dark backdrop for ~1350ms so players can clearly witness the full
-   * winning line formation and connecting path before the popup enters.
+  /* ─── Deterministic Win Animation Sequence Controller ───
+   * Guarantees: Win detected → Line starts drawing → animationend completes → Popup appears.
+   * State is tied deterministically to roundKey: "round_winner_line" so state cannot get stale.
    */
-  var _modalReady = false;
-  var _modalRevealTimer = null;
+  var _winAnim = {
+    roundKey: null,      // e.g. "1_X_0,1,2"
+    phase: 'IDLE',       // 'IDLE' | 'DRAWING' | 'POPUP_SHOWN'
+    fallbackTimer: null
+  };
+  var _drawTimer = null;
 
-  function _scheduleModalReveal(delay) {
-    if (_modalReady || _modalRevealTimer) return;
-    _modalRevealTimer = setTimeout(function () {
-      _modalRevealTimer = null;
-      _modalReady = true;
-      var c = getCtx();
-      if (c && c.render) c.render();
-    }, delay);
+  function _getWinRoundKey(ttt) {
+    if (!ttt || !ttt.winner || !ttt.winLine) return null;
+    var sorted = ttt.winLine.slice().sort(function (a, b) { return a - b; }).join(',');
+    return (ttt.roundCount || 1) + '_' + ttt.winner + '_' + sorted;
   }
 
-  function _resetModalState() {
-    _modalReady = false;
-    if (_modalRevealTimer) {
-      clearTimeout(_modalRevealTimer);
-      _modalRevealTimer = null;
+  function _resetWinAnim() {
+    _winAnim.roundKey = null;
+    _winAnim.phase = 'IDLE';
+    if (_winAnim.fallbackTimer) {
+      clearTimeout(_winAnim.fallbackTimer);
+      _winAnim.fallbackTimer = null;
+    }
+    if (_drawTimer) {
+      clearTimeout(_drawTimer);
+      _drawTimer = null;
+    }
+  }
+
+  function _startSprinkler() {
+    var canvas = document.getElementById('tttSprinklerCanvas');
+    if (canvas && global.JodiTTTFx && global.JodiTTTFx.startSprinkler) {
+      global.JodiTTTFx.startSprinkler(canvas, 3600);
+    }
+  }
+
+  function _stopSprinkler() {
+    if (global.JodiTTTFx && global.JodiTTTFx.stopSprinkler) {
+      global.JodiTTTFx.stopSprinkler();
     }
   }
 
@@ -100,7 +116,8 @@
     game.roundCount = 1;
 
     _lastPlacedIdx = -1;
-    _resetModalState();
+    _resetWinAnim();
+    _stopSprinkler();
     c.state.ttt = game;
     c.state.screen = 'ttt';
     if (c.Audio && c.Audio.playTap) c.Audio.playTap();
@@ -160,11 +177,11 @@
    */
   function _renderStatusBanner(ttt, isMyTurn) {
     if (ttt.winner) {
-      if (!_modalReady) {
+      if (_winAnim.phase !== 'POPUP_SHOWN') {
         var TTT = global.JodiTTT;
         var res = TTT.getGameResult(ttt);
         var headline = res ? res.headline : 'Shandaar Jeet!';
-        return '<div class="ttt-status-banner ttt-status-win-interim">' +
+        return '<div class="ttt-status-banner ttt-status-win-interim" id="tttStatusBanner">' +
           '<span class="ttt-turn-pulse ttt-pulse-win"></span> ✨ ' + esc(headline) + ' — Winning path dekhein!' +
         '</div>';
       }
@@ -172,8 +189,8 @@
     }
 
     if (ttt.isDraw) {
-      if (!_modalReady) {
-        return '<div class="ttt-status-banner ttt-status-draw-interim">' +
+      if (_winAnim.phase !== 'POPUP_SHOWN') {
+        return '<div class="ttt-status-banner ttt-status-draw-interim" id="tttStatusBanner">' +
           '🤝 Barabar Takkar! Match Draw!' +
         '</div>';
       }
@@ -207,15 +224,16 @@
    * molten-gold (X) or jade-glow (O) slash with soft bloom, drawn on with a
    * dash-offset reveal. Definitions are inlined per-render (cheap, scoped).
    */
-  function _renderWinLineSvg(winLine, winner) {
+  function _renderWinLineSvg(winLine, winner, isCompleted) {
     if (!winLine || winLine.length < 3) return '';
     var key = winLine.slice().sort(function (a, b) { return a - b; }).join(',');
     var c = WIN_LINE_COORDS[key];
     if (!c) return '';
 
     var colorClass = (winner === 'O') ? 'line-o' : 'line-x';
+    var completeClass = isCompleted ? ' line-complete' : '';
 
-    return '<svg class="ttt-win-line-svg ' + colorClass + '" viewBox="0 0 300 300" aria-hidden="true">' +
+    return '<svg class="ttt-win-line-svg ' + colorClass + completeClass + '" id="tttWinLineSvg" viewBox="0 0 300 300" aria-hidden="true">' +
       '<defs>' +
         '<filter id="tttWinGlow" x="-60%" y="-60%" width="220%" height="220%">' +
           '<feGaussianBlur stdDeviation="6" result="tttBlur" />' +
@@ -235,8 +253,8 @@
           '<stop offset="100%" stop-color="#0e7a63" />' +
         '</linearGradient>' +
       '</defs>' +
-      '<line class="ttt-win-line-glow" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '" pathLength="100" />' +
-      '<line class="ttt-win-line-core" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '" pathLength="100" />' +
+      '<line class="ttt-win-line-glow" id="tttWinLineGlow" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '" pathLength="100" />' +
+      '<line class="ttt-win-line-core" id="tttWinLineCore" x1="' + c.x1 + '" y1="' + c.y1 + '" x2="' + c.x2 + '" y2="' + c.y2 + '" pathLength="100" />' +
     '</svg>';
   }
 
@@ -271,7 +289,8 @@
 
     /* Immediately draw the smooth cut-through winning line when win is detected */
     if (ttt.winner && ttt.winLine) {
-      boardHtml += _renderWinLineSvg(ttt.winLine, ttt.winner);
+      var isCompleted = (_winAnim.phase === 'POPUP_SHOWN');
+      boardHtml += _renderWinLineSvg(ttt.winLine, ttt.winner, isCompleted);
     }
 
     boardHtml += '</div>';
@@ -310,7 +329,8 @@
    */
   function _renderCelebrationModal(ttt, mySymbol, canReset) {
     if (!ttt.winner && !ttt.isDraw) return '';
-    if (!_modalReady) return ''; // Wait until winning line animation completes before popping up!
+    if (ttt.winner && _winAnim.phase !== 'POPUP_SHOWN') return ''; // Line animation must complete first!
+    if (ttt.isDraw && _winAnim.phase !== 'POPUP_SHOWN') return '';
 
     var TTT = global.JodiTTT;
     var res = TTT.getGameResult(ttt);
@@ -396,19 +416,26 @@
     var ttt = c.state.ttt;
     if (!ttt) return '<section class="screen"></section>';
 
-    // Synchronize celebration modal timer lifecycle
-    if (!ttt.winner && !ttt.isDraw) {
-      _resetModalState();
-    } else if (!_modalReady && !_modalRevealTimer) {
-      // 1350ms delay for winning line to fully form and shine; 650ms for draw
-      _scheduleModalReveal(ttt.winner ? 1350 : 650);
-    }
-
     var Net = c.Net || global.JodiNet;
     var isConnected = Net && Net.getStatus() === 'connected';
     var mySymbol = ttt.mySymbol || 'X';
     var isMyTurn = (ttt.currentPlayer === mySymbol && !ttt.winner && !ttt.isDraw);
     var canReset = ttt.isSolo || (isConnected && Net.isHostUser());
+
+    // Deterministic Win Animation Lifecycle
+    var winKey = _getWinRoundKey(ttt);
+    if (!winKey) {
+      if (!ttt.isDraw) {
+        _resetWinAnim();
+      }
+    } else if (_winAnim.roundKey !== winKey) {
+      _winAnim.roundKey = winKey;
+      _winAnim.phase = 'DRAWING';
+      if (_winAnim.fallbackTimer) {
+        clearTimeout(_winAnim.fallbackTimer);
+        _winAnim.fallbackTimer = null;
+      }
+    }
 
     var Lobby = global.JodiLobby;
     var headerHtml = Lobby ? Lobby.renderHeader() : '';
@@ -417,7 +444,7 @@
     var statusHtml = _renderStatusBanner(ttt, isMyTurn);
     var boardHtml = _renderBoard(ttt, isMyTurn);
     var trayHtml = _renderPieceTray(ttt, mySymbol, isMyTurn);
-    var modalHtml = _renderCelebrationModal(ttt, mySymbol, canReset);
+    var modalHtml = _winAnim.phase === 'POPUP_SHOWN' ? _renderCelebrationModal(ttt, mySymbol, canReset) : '';
 
     return '<section class="screen ttt-screen">' +
       headerHtml +
@@ -431,7 +458,7 @@
         '</div>' +
         trayHtml +
       '</div>' +
-      modalHtml +
+      '<div id="tttCelebrationMount">' + modalHtml + '</div>' +
     '</section>';
   }
 
@@ -444,21 +471,17 @@
     var c = getCtx();
     var ttt = c.state && c.state.ttt;
 
-    // Trigger celebratory upward sprinkler fountain when win popup enters
-    if (ttt && ttt.winner && _modalReady) {
-      var canvas = document.getElementById('tttSprinklerCanvas');
-      if (canvas && global.JodiTTTFx && global.JodiTTTFx.startSprinkler) {
-        setTimeout(function () {
-          var curTTT = c.state && c.state.ttt;
-          if (curTTT && curTTT.winner && _modalReady) {
-            global.JodiTTTFx.startSprinkler(canvas, 3600);
-          }
-        }, 120);
+    // Handle winning line animation sequence & celebration
+    if (ttt && ttt.winner) {
+      if (_winAnim.phase === 'DRAWING') {
+        _bindWinLineAnimation();
+      } else if (_winAnim.phase === 'POPUP_SHOWN') {
+        _startSprinkler();
       }
+    } else if (ttt && ttt.isDraw) {
+      _handleDrawSequence();
     } else {
-      if (global.JodiTTTFx && global.JodiTTTFx.stopSprinkler) {
-        global.JodiTTTFx.stopSprinkler();
-      }
+      _stopSprinkler();
     }
 
     var token = document.getElementById('tttDragToken');
@@ -547,6 +570,109 @@
     if (_docMouseMove) document.removeEventListener('mousemove', _docMouseMove);
     if (_docMouseUp) document.removeEventListener('mouseup', _docMouseUp);
     _docTouchMove = _docTouchEnd = _docMouseMove = _docMouseUp = null;
+  }
+
+  /* ─── Win Line Animation End Trigger & Celebration Reveal ─── */
+  function _bindWinLineAnimation() {
+    var coreLine = document.getElementById('tttWinLineCore');
+    if (!coreLine) {
+      _onWinLineComplete();
+      return;
+    }
+
+    // Fallback safety timer: in case animationend is suppressed (e.g. headless, throttled tab)
+    // CSS animation duration is 0.6s + 0.08s delay = 0.68s. Fallback triggers at 1100ms.
+    if (_winAnim.fallbackTimer) clearTimeout(_winAnim.fallbackTimer);
+    _winAnim.fallbackTimer = setTimeout(function () {
+      _onWinLineComplete();
+    }, 1100);
+
+    var handled = false;
+    function onLineAnimationEnd(e) {
+      if (handled) return;
+      if (e && e.animationName && e.animationName !== 'tttDrawLine') return;
+      handled = true;
+
+      coreLine.removeEventListener('animationend', onLineAnimationEnd);
+      coreLine.removeEventListener('webkitAnimationEnd', onLineAnimationEnd);
+
+      if (_winAnim.fallbackTimer) {
+        clearTimeout(_winAnim.fallbackTimer);
+        _winAnim.fallbackTimer = null;
+      }
+
+      // Small pause (220ms) so players can clearly register and enjoy the completed path
+      setTimeout(function () {
+        _onWinLineComplete();
+      }, 220);
+    }
+
+    coreLine.addEventListener('animationend', onLineAnimationEnd);
+    coreLine.addEventListener('webkitAnimationEnd', onLineAnimationEnd);
+  }
+
+  function _onWinLineComplete() {
+    if (_winAnim.phase === 'POPUP_SHOWN') return; // Guard: trigger exactly once
+    _winAnim.phase = 'POPUP_SHOWN';
+
+    if (_winAnim.fallbackTimer) {
+      clearTimeout(_winAnim.fallbackTimer);
+      _winAnim.fallbackTimer = null;
+    }
+
+    // 1. Keep the winning line fully solid & visible
+    var svg = document.getElementById('tttWinLineSvg');
+    if (svg) {
+      svg.classList.add('line-complete');
+    }
+
+    // 2. Hide interim status banner
+    var banner = document.getElementById('tttStatusBanner');
+    if (banner) {
+      banner.style.display = 'none';
+    }
+
+    // 3. Directly inject celebration modal into mount without re-rendering board
+    var c = getCtx();
+    var ttt = c.state && c.state.ttt;
+    if (!ttt) return;
+
+    var Net = c.Net || global.JodiNet;
+    var isConnected = Net && Net.getStatus() === 'connected';
+    var canReset = ttt.isSolo || (isConnected && Net.isHostUser());
+    var mySymbol = ttt.mySymbol || 'X';
+
+    var mount = document.getElementById('tttCelebrationMount');
+    if (mount) {
+      mount.innerHTML = _renderCelebrationModal(ttt, mySymbol, canReset);
+      _startSprinkler();
+    } else {
+      if (c.render) c.render();
+    }
+  }
+
+  function _handleDrawSequence() {
+    var c = getCtx();
+    var ttt = c.state && c.state.ttt;
+    if (!ttt || !ttt.isDraw) return;
+
+    var drawKey = (ttt.roundCount || 1) + '_draw_' + ttt.moveCount;
+    if (_winAnim.roundKey === drawKey && _winAnim.phase === 'POPUP_SHOWN') return;
+
+    _winAnim.roundKey = drawKey;
+    if (_drawTimer) clearTimeout(_drawTimer);
+    _drawTimer = setTimeout(function () {
+      _drawTimer = null;
+      _winAnim.phase = 'POPUP_SHOWN';
+      var mount = document.getElementById('tttCelebrationMount');
+      if (mount) {
+        var Net = c.Net || global.JodiNet;
+        var isConnected = Net && Net.getStatus() === 'connected';
+        var canReset = ttt.isSolo || (isConnected && Net.isHostUser());
+        var mySymbol = ttt.mySymbol || 'X';
+        mount.innerHTML = _renderCelebrationModal(ttt, mySymbol, canReset);
+      }
+    }, 600);
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -667,11 +793,8 @@
     var ttt = state && state.ttt;
     if (!ttt) return;
 
-    _resetModalState();
-
-    if (global.JodiTTTFx && global.JodiTTTFx.stopSprinkler) {
-      global.JodiTTTFx.stopSprinkler();
-    }
+    _resetWinAnim();
+    _stopSprinkler();
 
     var prevScores = preserveScores ? ttt.scores : { X: 0, O: 0, draws: 0 };
     var roundCount = preserveScores ? ttt.roundCount + 1 : 1;
@@ -707,12 +830,10 @@
 
   function cleanup() {
     _cleanupDragListeners();
-    _resetModalState();
+    _resetWinAnim();
     _lastPlacedIdx = -1;
     if (_lastPlacedClearTimer) { clearTimeout(_lastPlacedClearTimer); _lastPlacedClearTimer = null; }
-    if (global.JodiTTTFx && global.JodiTTTFx.stopSprinkler) {
-      global.JodiTTTFx.stopSprinkler();
-    }
+    _stopSprinkler();
   }
 
   /* ═══════════════════════════════════════════════════════════════

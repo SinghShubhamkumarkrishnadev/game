@@ -3970,6 +3970,16 @@ html, body {
   animation-delay: 0.08s;
 }
 
+.ttt-win-line-svg.line-complete .ttt-win-line-core {
+  stroke-dashoffset: 0 !important;
+  animation: none !important;
+}
+
+.ttt-win-line-svg.line-complete .ttt-win-line-glow {
+  stroke-dashoffset: 0 !important;
+  animation: tttGlowPulse 1.9s ease-in-out infinite alternate !important;
+}
+
 .ttt-win-line-glow {
   stroke-width: 15;
   opacity: 0.5;
@@ -4163,9 +4173,9 @@ html, body {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(22, 7, 34, 0.72);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(22, 7, 34, 0.52);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   animation: tttFadeIn 0.3s ease;
 }
 
