@@ -178,6 +178,23 @@
           '<div><div class="guide-step-title">⚡ Frenzy Mode &amp; Streaks</div>' +
           '<div class="guide-step-desc">Aakhri ke seconds me <b>Frenzy Mode</b> shuru hota hai — targets super fast aayenge aur consecutive hits par 🔥 <b>Streaks</b> banti hain!</div></div>' +
           '</div>';
+      } else if (tab === 'rps') {
+        contentHtml = '<div class="guide-badge-box">⚔️ <span><b>Rock Paper Scissors Battle</b> — Best of 5 Rounds: Mind games, bluffs aur power moves!</span></div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">1</span>' +
+          '<div><div class="guide-step-title">Classic Rules &amp; Lock-in Countdown</div>' +
+          '<div class="guide-step-desc">🪨 Rock beats ✂️ Scissors, ✂️ Scissors beats 📄 Paper, 📄 Paper beats 🪨 Rock. 3-second countdown ke andar move lock karein!</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">2</span>' +
+          '<div><div class="guide-step-title">Fake-Out Bluff Mechanic</div>' +
+          '<div class="guide-step-desc">Reveal se pehle hand rapid bluff animation cycle karega — partner ko predict karna mushkil hoga!</div></div>' +
+          '</div>' +
+          '<div class="guide-step-card">' +
+          '<span class="guide-num">3</span>' +
+          '<div><div class="guide-step-title">Special Moves &amp; Combos</div>' +
+          '<div class="guide-step-desc">💥 <b>Power Throw</b> (Super Clash), ⚡ <b>Double Down</b> (Jeetne par +2 PTS!), 🎭 <b>Mystery</b> (Move hide karein). Consecutive jeet par 🔥 <b>Combos</b> unlock hoti hain!</div></div>' +
+          '</div>';
       } else if (tab === 'install') {
         contentHtml = '<div class="guide-badge-box">📲 <span>Ye game ek <b>Progressive Web App (PWA)</b> hai — bina App Store ke direct install hota hai!</span></div>' +
           '<div class="guide-step-card">' +
@@ -208,6 +225,7 @@
         '<button type="button" class="guide-tab-btn ' + (tab === 'race' ? 'active' : '') + '" data-action="setGuideTab" data-tab="race">🏍️ 3D Race</button>' +
         '<button type="button" class="guide-tab-btn ' + (tab === 'tictactoe' ? 'active' : '') + '" data-action="setGuideTab" data-tab="tictactoe">⭕ Tic-Tac-Toe</button>' +
         '<button type="button" class="guide-tab-btn ' + (tab === 'reaction' ? 'active' : '') + '" data-action="setGuideTab" data-tab="reaction">⚡ Reaction</button>' +
+        '<button type="button" class="guide-tab-btn ' + (tab === 'rps' ? 'active' : '') + '" data-action="setGuideTab" data-tab="rps">⚔️ RPS</button>' +
         '<button type="button" class="guide-tab-btn ' + (tab === 'install' ? 'active' : '') + '" data-action="setGuideTab" data-tab="install">📲 Install</button>' +
         '</div>' +
         '<div class="guide-content-scroll">' + contentHtml + '</div>' +

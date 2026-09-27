@@ -1,5 +1,5 @@
 /* Jodi Sync Service Worker - Offline, PWA Caching & Instant Auto-Update */
-const CACHE_NAME = 'jodi-v4.8-reaction-duel';
+const CACHE_NAME = 'jodi-v4.9-rps-battle';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -22,6 +22,9 @@ const ASSETS_TO_CACHE = [
   './js/reaction-duel.js',
   './js/reaction-duel-fx.js',
   './js/reaction-duel-ui.js',
+  './js/rps-battle.js',
+  './js/rps-battle-fx.js',
+  './js/rps-battle-ui.js',
   './js/solo-arcade.js',
   './js/lobby.js',
   './js/modals.js',

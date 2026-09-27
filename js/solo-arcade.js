@@ -23,16 +23,28 @@
    */
   var GAME_CARDS = [
     {
+      id: 'rps',
+      icon: '⚔️',
+      title: 'Rock Paper Scissors Battle',
+      tagline: 'Mind games, bluffs aur power moves',
+      desc: '3-Round decider battle — Fake-out bluffs, Power Throw aur Double Down ke saath AI Mind ko outsmart karo.',
+      action: 'soloPlayRPS',
+      btnClass: 'rps-arcade-btn',
+      btnLabel: 'RPS Battle Solo Khelo ⚔️',
+      badgeText: 'Psych AI',
+      badgeStyle: 'background:#FFF5EB;color:#C2410C;border-color:#EA580C'
+    },
+    {
       id: 'reaction',
       icon: '⚡',
       title: 'Quick Reaction Duel',
       tagline: 'Pure speed aur reflex — kaun faster hai?',
       desc: 'Screen par achanak target aayega — jo sabse pehle tap karega point uska! False start se bacho, bombs se door raho aur AI Reflex bot ko harao.',
       action: 'soloPlayReaction',
-      btnClass: 'gold',
+      btnClass: 'reaction-arcade-btn',
       btnLabel: 'Reflex Duel Solo Khelo ⚡',
       badgeText: 'Reflex AI',
-      badgeStyle: 'background:#FFF8E6;color:#B37D00;border-color:var(--genda)'
+      badgeStyle: 'background:#F0F9FF;color:#0284C7;border-color:#0284C7'
     },
     {
       id: 'ttt',

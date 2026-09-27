@@ -15,6 +15,8 @@
   var TTTUI = window.JodiTTTUI;
   var ReactionUI = window.JodiReactionUI;
   var ReactionEngine = window.JodiReactionEngine;
+  var RPSUI = window.JodiRPSUI;
+  var RPSEngine = window.JodiRPSEngine;
 
   /* Helper utilities */
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
@@ -82,7 +84,11 @@
       duration: 15,
       hardMode: false
     },
-    reactionGame: null
+    reactionGame: null,
+    rpsSettings: {
+      targetWins: 3
+    },
+    rpsGame: null
   };
 
   /* Confetti Engine */
@@ -157,6 +163,7 @@
   if (SoloArcade && SoloArcade.init) SoloArcade.init(appContext);
   if (TTTUI && TTTUI.init) TTTUI.init(appContext);
   if (ReactionUI && ReactionUI.init) ReactionUI.init(appContext);
+  if (RPSUI && RPSUI.init) RPSUI.init(appContext);
 
   /* Network Event Handlers */
   Net.on('statusChange', function (status) {
@@ -795,6 +802,7 @@
     else if (state.screen === 'solo_arcade') html = SoloArcade ? SoloArcade.vArcade() : '';
     else if (state.screen === 'ttt') html = TTTUI ? TTTUI.vGame() : '';
     else if (state.screen === 'reaction') html = ReactionUI ? ReactionUI.vGame() : '';
+    else if (state.screen === 'rps') html = RPSUI ? RPSUI.vGame() : '';
 
     view.innerHTML = html;
     renderModal();
@@ -852,6 +860,8 @@
       if (TTTUI.bindBoardEvents) TTTUI.bindBoardEvents();
     } else if (state.screen === 'reaction' && ReactionUI) {
       if (ReactionUI.bindArenaEvents) ReactionUI.bindArenaEvents();
+    } else if (state.screen === 'rps' && RPSUI) {
+      if (RPSUI.bindRoundEvents) RPSUI.bindRoundEvents();
     }
   }
 
@@ -989,6 +999,59 @@
     render();
   });
 
+  /* ─── RPS Battle Network Event Handlers ─── */
+  Net.on('UPDATE_RPS_SETTINGS', function (payload) {
+    if (payload) {
+      state.rpsSettings = {
+        targetWins: payload.targetWins || 3
+      };
+      render();
+    }
+  });
+
+  Net.on('RPS_START', function (payload) {
+    var Engine = window.JodiRPSEngine;
+    if (!Engine) return;
+    var targetWins = payload.targetWins || 3;
+    var game = Engine.createGame({
+      targetWins: targetWins,
+      isSolo: false,
+      p1Name: payload.hostName || Net.getPartnerName() || 'Partner',
+      p1Avatar: Net.getPartnerAvatar() || '✨',
+      p2Name: profile.name,
+      p2Avatar: profile.avatar
+    });
+    state.rpsGame = game;
+    state.screen = 'rps';
+    Audio.playTap();
+    toast('RPS Battle shuru! ⚔️ Ready!');
+    render();
+    if (RPSUI && RPSUI.startRoundCountdown) {
+      RPSUI.startRoundCountdown();
+    }
+  });
+
+  Net.on('RPS_MOVE', function (payload) {
+    var game = state.rpsGame;
+    if (!game) return;
+    game.p2.currentMove = payload.move;
+    game.p2.activeSpecial = payload.special;
+  });
+
+  Net.on('RPS_RESET', function (payload) {
+    if (RPSUI && RPSUI.resetMatch) {
+      RPSUI.resetMatch(false);
+    }
+  });
+
+  Net.on('RPS_FINISH', function (payload) {
+    var game = state.rpsGame;
+    if (!game) return;
+    game.state = 'FINISHED';
+    Audio.playMatch();
+    render();
+  });
+
   /* User Actions Dispatcher */
   document.addEventListener('click', function (e) {
     var target = e.target.closest('[data-action]');
@@ -1120,6 +1183,8 @@
       state.twoMinds = null;
       if (ReactionUI && ReactionUI.cleanup) ReactionUI.cleanup();
       state.reactionGame = null;
+      if (RPSUI && RPSUI.cleanup) RPSUI.cleanup();
+      state.rpsGame = null;
       render();
     } else if (action === 'setMode') {
       Audio.playTap();
@@ -1479,6 +1544,79 @@
       Audio.playTap();
       if (ReactionUI && ReactionUI.cleanup) ReactionUI.cleanup();
       state.reactionGame = null;
+      if (Net.getStatus() === 'connected') {
+        state.screen = 'room_ready';
+        Net.send('RETURN_LOBBY', {});
+        toast('Room Lobby mein wapas aa gaye 🏠');
+      } else {
+        state.screen = 'lobby';
+        toast('Lobby mein wapas aa gaye 🏠');
+      }
+      render();
+    } else if (action === 'setRPSTargetWins') {
+      Audio.playTap();
+      state.rpsSettings.targetWins = +target.dataset.val;
+      if (Net.getStatus() === 'connected') {
+        Net.send('UPDATE_RPS_SETTINGS', state.rpsSettings);
+      }
+      render();
+    } else if (action === 'startRPSMatch') {
+      Audio.playTap();
+      if (!Net.isHostUser()) return;
+      var Engine = window.JodiRPSEngine;
+      if (!Engine) return;
+      var rpsSettings = state.rpsSettings || { targetWins: 3 };
+      var rpsGame = Engine.createGame({
+        targetWins: rpsSettings.targetWins || 3,
+        isSolo: false,
+        p1Name: profile.name,
+        p1Avatar: profile.avatar,
+        p2Name: Net.getPartnerName() || 'Partner',
+        p2Avatar: Net.getPartnerAvatar() || '✨'
+      });
+      state.rpsGame = rpsGame;
+      state.screen = 'rps';
+      Net.send('RPS_START', {
+        targetWins: rpsSettings.targetWins,
+        hostName: profile.name
+      });
+      toast('RPS Battle shuru! ⚔️ Ready!');
+      render();
+      if (RPSUI && RPSUI.startRoundCountdown) {
+        RPSUI.startRoundCountdown();
+      }
+    } else if (action === 'soloPlayRPS') {
+      Audio.playTap();
+      state.modal = null;
+      if (RPSUI && RPSUI.launchSolo) {
+        RPSUI.launchSolo(state.rpsSettings);
+      }
+    } else if (action === 'rpsMoveSelect') {
+      var move = target.dataset.move;
+      if (RPSUI && RPSUI.handleMoveSelect) {
+        RPSUI.handleMoveSelect(move);
+      }
+    } else if (action === 'rpsSpecialActivate') {
+      var specialId = target.dataset.special;
+      if (RPSUI && RPSUI.handleSpecialActivate) {
+        RPSUI.handleSpecialActivate(specialId);
+      }
+    } else if (action === 'rpsPlayAgain') {
+      Audio.playTap();
+      var rGame = state.rpsGame;
+      if (!rGame) return;
+      if (rGame.isSolo) {
+        if (RPSUI && RPSUI.resetMatch) RPSUI.resetMatch(false);
+      } else if (Net.isHostUser()) {
+        if (RPSUI && RPSUI.resetMatch) RPSUI.resetMatch(false);
+        Net.send('RPS_RESET', {});
+      } else {
+        toast('Host se agla match shuru karne ko kahein! ⏳');
+      }
+    } else if (action === 'rpsLeave') {
+      Audio.playTap();
+      if (RPSUI && RPSUI.cleanup) RPSUI.cleanup();
+      state.rpsGame = null;
       if (Net.getStatus() === 'connected') {
         state.screen = 'room_ready';
         Net.send('RETURN_LOBBY', {});

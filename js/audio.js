@@ -397,6 +397,105 @@
       gain.connect(ac.destination);
       osc.start(now);
       osc.stop(now + 0.25);
+    },
+
+    // RPS Battle — Heavy Impact Clash
+    playClash: function () {
+      buzz([60, 40, 80]);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var now = ac.currentTime;
+      // Punchy metallic square + sine hit
+      var osc1 = ac.createOscillator();
+      var gain1 = ac.createGain();
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(220, now);
+      osc1.frequency.exponentialRampToValueAtTime(45, now + 0.22);
+      gain1.gain.setValueAtTime(0.3, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc1.connect(gain1);
+      gain1.connect(ac.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.22);
+
+      var osc2 = ac.createOscillator();
+      var gain2 = ac.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(840, now);
+      osc2.frequency.exponentialRampToValueAtTime(120, now + 0.18);
+      gain2.gain.setValueAtTime(0.25, now);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc2.connect(gain2);
+      gain2.connect(ac.destination);
+      osc2.start(now);
+      osc2.stop(now + 0.18);
+    },
+
+    // RPS Battle — Fast Whoosh / Bluff Flicker
+    playWhoosh: function () {
+      buzz(10);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var now = ac.currentTime;
+      var osc = ac.createOscillator();
+      var gain = ac.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(420, now);
+      osc.frequency.exponentialRampToValueAtTime(780, now + 0.08);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      osc.connect(gain);
+      gain.connect(ac.destination);
+      osc.start(now);
+      osc.stop(now + 0.08);
+    },
+
+    // RPS Battle — Combo Riser Fanfare
+    playComboSting: function () {
+      buzz([25, 35, 45, 55]);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var now = ac.currentTime;
+      [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach(function (freq, i) {
+        var osc = ac.createOscillator();
+        var gain = ac.createGain();
+        var t = now + i * 0.045;
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        osc.start(t);
+        osc.stop(t + 0.14);
+      });
+    },
+
+    // RPS Battle — Special Ability Power-Up Activation
+    playSpecialActivate: function () {
+      buzz([20, 50, 40]);
+      if (isMuted) return;
+      var ac = getAudioContext();
+      if (!ac) return;
+
+      var now = ac.currentTime;
+      var osc = ac.createOscillator();
+      var gain = ac.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(260, now);
+      osc.frequency.exponentialRampToValueAtTime(1100, now + 0.22);
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.connect(gain);
+      gain.connect(ac.destination);
+      osc.start(now);
+      osc.stop(now + 0.25);
     }
   };
 
