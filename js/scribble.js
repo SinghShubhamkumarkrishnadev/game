@@ -979,6 +979,25 @@
   function bindGuessForm() {
     var form = $('#guessForm');
     if (!form) return;
+
+    // Minimal keyboard-jump prevention:
+    // When the soft keyboard opens, the browser auto-scrolls #view to keep
+    // the input in view — which pushes the canvas up. We simply reset the
+    // scroll immediately so nothing moves. Layout stays exactly as-is.
+    var inputEl = $('#guessInput');
+    if (inputEl) {
+      inputEl.addEventListener('focus', function () {
+        var view = document.getElementById('view');
+        // Let keyboard animation start, then snap scroll back to 0
+        requestAnimationFrame(function () {
+          if (view) view.scrollTop = 0;
+          setTimeout(function () {
+            if (view) view.scrollTop = 0;
+          }, 150);
+        });
+      });
+    }
+
     form.onsubmit = function (e) {
       e.preventDefault();
       var input = $('#guessInput');

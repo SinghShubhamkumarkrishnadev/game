@@ -1555,7 +1555,7 @@ html, body {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow-x: hidden;
+  overflow: hidden;          /* Prevents browser scroll-to-input from shifting canvas */
 }
 
 /* Ultra-Compact Optimization for 5-8 Year Old Phones & Narrow Screens (320px - 380px) */
