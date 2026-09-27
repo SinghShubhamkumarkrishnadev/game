@@ -660,7 +660,7 @@
     var chatList = (app.state.game.chat || []).slice().reverse();
     var chatFeedHtml = '';
     if (chatList.length === 0) {
-      chatFeedHtml = '<div class="wa-empty-state">✨ Yahan aap dono ki WhatsApp chat aur guesses aayenge (Naye messages upar)</div>';
+      chatFeedHtml = '<div class="wa-empty-state">💬 Chat ya Guess yahan aayenge</div>';
     } else {
       chatFeedHtml = chatList.map(function (c) {
         return renderMessageBubbleHtml(c, app.profile.name);
@@ -668,26 +668,19 @@
     }
 
     var placeholderText = isDrawer
-      ? 'Partner ko cheer ya hint likhein (Answer mat batayein)...'
-      : 'Shabd guess karo ya chat likhein...';
+      ? 'Hint ya message...'
+      : 'Guess ya message...';
     var sendBtnIcon = isDrawer ? '💬' : '🚀';
     var inputAutocap = isDrawer ? 'sentences' : 'characters';
 
     var chatSectionHtml = '<div class="scribble-chat-card">' +
-      '<div class="wa-chat-header">' +
-      '<div class="wa-header-left">' +
-      '<span class="wa-online-dot"></span>' +
-      '<span class="wa-header-title">💬 Jodi Sync Chat &amp; Guesses</span>' +
-      '</div>' +
-      '<span class="wa-header-badge">⚡ Naye messages upar</span>' +
-      '</div>' +
       '<div class="chat-feed wa-feed" id="chatFeed">' +
       chatFeedHtml +
       '</div>' +
       '<div class="wa-quick-row">' +
-      '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="🔥 Garam!">🔥 Garam!</button>' +
+      '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="🔥 Garam!">🔥 Garam</button>' +
       '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="❄️ Thanda!">❄️ Thanda</button>' +
-      '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="👏 Sahi ja rahe!">👏 Sahi ja rahe</button>' +
+      '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="👏 Sahi ja rahe!">👏 Sahi</button>' +
       '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="😂 Haha!">😂 Haha</button>' +
       '<button type="button" class="wa-chip" data-action="sendQuickReaction" data-val="❤️">❤️ Love</button>' +
       '</div>' +
